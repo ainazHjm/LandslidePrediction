@@ -10,50 +10,50 @@ from tensorboardX import SummaryWriter
 writer = SummaryWriter()
 
 def validate(model, valset):
-    # criterion = nn.BCELoss()
-    # (_, h, w)= valset.shape
-    criterion = nn.NLLLoss()
+    label = valset[-1, :, :]
+    criterion = nn.BCEWithLogitsLoss()
     predictions = model(valset[:-1, :, :].unsqueeze(0).cuda())
-    indices = (valset[0, :, :].view(-1) == -100).nonzero()
+    prds = predictions[0, 0, :, :]
     loss = criterion(
-        predictions.view(-1),
-        valset[-1, :, :].cuda().view(-1),
-        ignore_index = indices
+        prds[valset[0, :, :] != -100],
+        label[valset[0, :, :] != -100].cuda()
         )
-    return loss.item()
+    return loss.detach().item()
 
 def train(args, train_data, val_data):
     (c, h, w) = train_data.shape
     train_model = model.FCN().cuda() if args.model == "FCN" else model.FCNwPool().cuda()
     optimizer = to.Adam(train_model.parameters(), lr = args.lr, weight_decay = args.decay)
-    # criterion = nn.BCELoss()
-    criterion = nn.NLLLoss()
+    # criterion = nn.NLLLoss()
+    criterion = nn.BCEWithLogitsLoss()
     print("model is initialized ...")
 
-    running_loss = []
+    running_loss = 0
+    # ignore_indices = (train_data[0, :, :].view(-1) == -100).nonzero()
     for i in range(args.n_epochs):
         optimizer.zero_grad()
 
         input_data = train_data[:-1, :, :].unsqueeze(0).cuda()
+        label = train_data[-1, :, :]
         if input_data.shape != (1, c-1, h, w):
             raise ValueError("the shape of the input data does not match.")
         
         predictions = train_model(input_data)
-        # print(train_data[-1, :, :])
+        # print(predictions.squeeze(0).shape)
+        # print(train_data[-1, :, :].unsqueeze(0).shape)
         if predictions.shape != (1, 1, h, w):
             raise ValueError("the shape of the output data does not match.")
+        prds = predictions[0, 0, :, :]
         # print(predictions.shape)
         # print(train_data[-1, :, :].unsqueeze(0).shape)
-        indices = (train_data[0, :, :].view(-1) == -100).nonzero()
         loss = criterion(
-            predictions.view(-1),
-            train_data[-1, :, :].cuda().view(-1),
-            ignore_index = indices
+            prds[train_data[0, :, :] != -100],
+            label[train_data[0, :, :] != -100].cuda()
             )
 
         print(">> loss: %f" % loss.item())
         writer.add_scalar("train loss", loss.item(), i)
-        running_loss.append(loss.item())
+        running_loss = running_loss + loss.item()
 
         v_loss = validate(train_model, val_data)
         # import ipdb
@@ -64,7 +64,7 @@ def train(args, train_data, val_data):
         loss.backward()
         optimizer.step()
     th.save(train_model, "../models/CNN/"+ctime()+".pt")
-    return running_loss
+    return running_loss/args.n_epochs
 
 def find_accuracy(model, data):
     predictions = model(data[:-1, :, :].unsqueeze(0).cuda()).view(-1)
@@ -72,10 +72,10 @@ def find_accuracy(model, data):
     predictions[predictions > 0.5] = 1
     predictions[predictions <= 0.5] = 0
     print(predictions)
-    acc = th.sum(data[-1, :, :].long().cuda().view(-1) == predictions.long())
+    acc = th.sum(data[-1, :, :].long().view(-1).cuda() == predictions.long())
     print(acc, predictions.shape)
     print(data[-1, :, :].long())
-    print(th.sum(data[-1, :, :].long().cuda().view(-1) == 1))
+    print(th.sum(data[-1, :, :].long().view(-1).cuda() == 1))
     return acc/predictions.shape[0]
 
 def cross_validate(args, data):

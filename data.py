@@ -54,14 +54,23 @@ def process(dir_path='../image_data/n_image_data/'):
         img = Image.open(dir_path+e)
         img = transforms.ToTensor()(img)
         data[i, :, :] = zero_one(img) if i == 4 else img
+    label = data[-1, :, :]
+    label[data[0, :, :] == -100] = -1
+    data[-1, :, :] = label
     return data
 
 def normalize(train_data, val_data):
-    (c, h, w) = train_data.shape
-    td = train_data.cuda().view(-1)
-    mean = th.mean(td)
-    std = th.std(td)
-
-    train_data = ((td-mean)/std).view(c, h, w)
-    vd = (val_data-mean)/std
-    return train_data, vd
+    (c, _, _) = train_data[:-1, :, :].shape # >>>> we shouldn't normalize the labels
+    indices = train_data[0, :, :] != -100
+    v_indices = val_data[0, :, :] != -100
+    print(indices.shape)
+    for i in range(c):
+        td = train_data[i, :, :]
+        mean = th.mean(td[indices].view(-1))
+        std = th.std(td[indices].view(-1))
+        train_data[i, :, :][indices] = (td[indices]-mean)/std
+        vd = val_data[i, :, :]
+        val_data[i, :, :][v_indices] = (vd[v_indices]-mean)/std
+        print("train>> before-> mean: %f, std: %f --- now-> mean: %f, std: %f" % (mean.item(), std.item(), th.mean(train_data[i, :, :][indices].view(-1)).item(), th.std(train_data[i, :, :][indices].view(-1)).item()))
+        print("validation>> mean: %f, std: %f" % (th.mean(val_data[i, :, :][v_indices].view(-1)).item(), th.std(val_data[i, :, :][v_indices].view(-1)).item()))
+    return train_data, val_data

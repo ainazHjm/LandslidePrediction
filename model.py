@@ -9,8 +9,7 @@ class FCN(nn.Module):
             nn.ReLU(),
             nn.Conv2d(4, 8, kernel_size=(3,3), stride=(1,1)),
             nn.ReLU(),
-            nn.ConvTranspose2d(8, 1, kernel_size=(3,3), stride=(1,1)),
-            nn.Sigmoid()
+            nn.Conv2d(8, 1, kernel_size=(3,3), stride=(1,1))
         )
     def forward(self, features):
         return self.net(features)
