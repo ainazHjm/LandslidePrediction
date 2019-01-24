@@ -1,7 +1,8 @@
-# import model
-from data import process
+from data import process, normalize
 from train import train, find_accuracy, cross_validate
 import argparse
+import torch as th
+import numpy as np
 # pylint: disable=E0611
 from utils.args import str2bool
 
@@ -21,21 +22,24 @@ def get_args():
 def main():
     args = get_args()
     data = process()
+
     if args.cross_validation:
         train_data, val_data, val_idx = cross_validate(args, data)
     else:
         val_data = th.load("../image_data/data/val_data.pt")
         val_idx = np.load("../image_data/data/val_idx.npy")
         train_data = th.load("../image_data/data/train_data.pt")
+
+    td, vd = normalize(train_data, val_data)
     
     if args.load_model_path:
         print("loading a trained model...")
         model = th.load(args.load_model_path)
-        acc = find_accuracy(model, val_data)
+        acc = find_accuracy(model, vd)
         print(">> accuracy on the validation set: %f" % acc)
     else:
         print("model is training ...")
-        loss = train(args, train_data, val_data)
+        loss = train(args, td, vd)
         print("model has been trained.")
 
 if __name__ == "__main__":
