@@ -5,6 +5,7 @@ import torch as th
 import numpy as np
 # pylint: disable=E0611
 from utils.args import str2bool
+from utils.plot import visualise
 
 def get_args():
     parser = argparse.ArgumentParser(description="Training a CNN-Classifier for landslide prediction")
@@ -16,7 +17,8 @@ def get_args():
     parser.add_argument("--batch_size", type=int, default=4)
     parser.add_argument("--decay", type=float, default=1e-5)
     parser.add_argument("--load_model_path", type=str, default='')
-    parser.add_argument("--save_features", type=str2bool, default=False)
+    # parser.add_argument("--save_features", type=str2bool, default=False)
+    parser.add_argument("--save_result", type=str2bool, default=False)
     return parser.parse_args()
 
 def main():
@@ -35,8 +37,9 @@ def main():
     if args.load_model_path:
         print("loading a trained model...")
         model = th.load(args.load_model_path)
-        acc = find_accuracy(model, vd)
-        print(">> accuracy on the validation set: %f" % acc)
+        # acc = find_accuracy(model, vd)
+        # print(">> accuracy on the validation set: %f" % acc)
+        visualise(model, vd)
     else:
         print("model is training ...")
         loss = train(args, td, vd)
