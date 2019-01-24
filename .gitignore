@@ -1,4 +1,5 @@
 runs/
+.vscode/
 nohup.out
 
 # Byte-compiled / optimized / DLL files
