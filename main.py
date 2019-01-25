@@ -23,23 +23,25 @@ def get_args():
 
 def main():
     args = get_args()
-    data = process()
+    # data = process()
 
     if args.cross_validation:
+        data = process()
         train_data, val_data, val_idx = cross_validate(args, data)
     else:
+        # the data that is loaded is standardized with mean 0 and std 1
         val_data = th.load("../image_data/data/val_data.pt")
         val_idx = np.load("../image_data/data/val_idx.npy")
         train_data = th.load("../image_data/data/train_data.pt")
 
-    td, vd = normalize(train_data, val_data)
+    # td, vd = normalize(train_data, val_data) # the data is normalized before
     
     if args.load_model_path:
         print("loading a trained model...")
-        model = th.load(args.load_model_path)
+        model = th.load(args.load_model_path).cuda()
         # acc = find_accuracy(model, vd)
         # print(">> accuracy on the validation set: %f" % acc)
-        visualise(model, vd)
+        visualise(args, model, vd)
     else:
         print("model is training ...")
         loss = train(args, td, vd)
