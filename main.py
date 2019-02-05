@@ -5,7 +5,7 @@ import torch as th
 import numpy as np
 # pylint: disable=E0611
 from utils.args import str2bool
-from utils.plot import visualise
+from utils.plot import save_results
 
 def get_args():
     parser = argparse.ArgumentParser(description="Training a CNN-Classifier for landslide prediction")

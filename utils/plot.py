@@ -3,8 +3,9 @@ from torch.nn import Sigmoid
 from torch import save
 from time import ctime
 from PIL import Image
+from torchvision.utils import save_image
 
-def visualise(args, model, val_data):
+def save_results(args, model, val_data):
     sig = Sigmoid()
     (_, h, w) = val_data.shape
     # model = model.cuda()
@@ -12,7 +13,9 @@ def visualise(args, model, val_data):
     im = predictions.view(h, w).detach()
     if args.save_result:
         name = ctime()
-        save(im, "../output/val_res"+name+".pt")
-        Image.fromarray(im.numpy()).save("../output/val_res"+name+".tif")
+        save(im, "../output/"+name+".pt")
+        save_image(im, "output/"+name+".jpg")
+        # Image.fromarray(im.numpy()).save("../output/val_res"+name+".tif")
     # im = predictions.view(h, w).detach()
-    pyplot.imshow(im.numpy())
+    # pyplot.imshow(im.numpy())
+    return name
