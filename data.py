@@ -22,12 +22,12 @@ def divide(data):
     """
     div = data.shape[2]//5
     val_idx = np.array(1)
-    np.save("../image_data/data/val_idx.npy", val_idx)
+    np.save("../image_data/data/CNN/val_idx.npy", val_idx)
     
     val_data = data[:, :, val_idx*div:(val_idx+1)*div]
     train_data = th.cat((data[:, :, 0:val_idx*div], data[:, :, (val_idx+1)*div:]), 2)
-    th.save(val_data, "../image_data/data/val_data.pt")
-    th.save(train_data, "../image_data/data/train_data.pt")
+    th.save(val_data, "../image_data/data/CNN/val_data.pt")
+    th.save(train_data, "../image_data/data/CNN/train_data.pt")
     return val_idx, val_data, train_data
 
 def zero_one(image):
@@ -36,7 +36,7 @@ def zero_one(image):
     image[image == 100] = 0
     return image
 
-def process(dir_path='../image_data/n_image_data/'):
+def process(dir_path='../image_data/n_image_data/veneto/'):
     """
     This function loads the whole data consisting of 5 different maps:
         the last map is the label map which is converted to a zero-one
