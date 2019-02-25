@@ -5,6 +5,7 @@ import torch.optim as to
 import torch.nn as nn
 from time import ctime
 from tensorboardX import SummaryWriter
+from torchvision.utils import save_image
 # pylint: disable=E1101,E0401,E1123
 
 writer = SummaryWriter()
@@ -13,7 +14,7 @@ def validate(model, valset):
     label = valset[-1, :, :]
     criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([50]).cuda())
     # criterion = nn.BCEWithLogitsLoss()
-    predictions = model(valset[:-1, :, :].unsqueeze(0).cuda())
+    (predictions, layer_outputs) = model.forward(valset[:-1, :, :].unsqueeze(0).cuda())
     prds = predictions[0, 0, :, :]
     loss = criterion(
         prds[valset[0, :, :] != -100],
@@ -42,7 +43,7 @@ def train(args, train_data, val_data):
         if input_data.shape != (1, c-1, h, w):
             raise ValueError("the shape of the input data does not match.")
         
-        predictions = train_model(input_data)
+        (predictions, layer_outputs) = train_model.forward(input_data)
         if predictions.shape != (1, 1, h, w):
             raise ValueError("the shape of the output data does not match.")
         prds = predictions[0, 0, :, :]
@@ -63,6 +64,9 @@ def train(args, train_data, val_data):
 
         loss.backward()
         optimizer.step()
+        if args.model == "FCNwPool":
+            if (i+1) % 20 == 0:
+                save_image(out_img, "../output/visualise/CNN/layer"+idx+"_"+ctime()+".jpg") for idx, out_img in enumertate(layer_outputs)
     th.save(train_model, "../models/CNN/"+ctime().replace("  "," ").replace(" ", "_").replace(":","_")+".pt")
     print("model has been trained and saved.")
     return running_loss/args.n_epochs
