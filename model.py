@@ -1,4 +1,5 @@
 import torch.nn as nn
+import torch as th
 # from torchvision import models
 
 class FCN(nn.Module):
@@ -12,19 +13,50 @@ class FCN(nn.Module):
             nn.Conv2d(8, 1, kernel_size=(3,3), stride=(1,1))
         )
     def forward(self, features):
-        return self.net(features)
+        return (self.net(features), 'FCN')
+
+class FCNBasicBlock(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(FCNBasicBlock, self).__init__()
+        self.net = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=(3,3), stride=(1,1)),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=(2,2), stride=(1,1)),
+        )
+    def forward(self, x):
+        return self.net(x)
 
 class FCNwPool(nn.Module):
     '''
-    TODO: implement the full network with pooling layers to see more distance around each point.
+    TODO: try the weighted network as well. instead of using the adaptive avg pooling,
+    learn the weights of each output feature map.
     '''
-    def __init__(self):
+    def __init__(self, shape):
         super(FCNwPool, self).__init__()
+        self.shape = shape # CxHxW
         self.net = nn.Sequential(
-            nn.Sigmoid()
+            nn.Conv2d(4, 4, kernel_size=(1,1), stride=(1,1)),
+            nn.Conv2d(4, 8, kernel_size=(3,3), stride=(1,1)),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=(2,2), stride=(1,1)),
+            FCNBasicBlock(8, 16),
+            FCNBasicBlock(16, 16),
+            nn.ConvTranspose2d(16, 1, kernel_size=(22,22), stride=(8, 8)),
         )
+        self.branch1 = nn.ConvTranspose2d(8, 1, kernel_size=(3,3), stride=(1,1))
+        self.branch2 = nn.ConvTranspose2d(8, 1, kernel_size=(4,4), stride=(2,2))
+        self.branch3 = nn.ConvTranspose2d(16, 1, kernel_size=(10,10), stride=(4,4))
+        self.avgpool = nn.AdaptiveAvgPool2d((self.shape[1], self.shape[2]))
+        
     def forward(self, features):
-        return self.net(features)
+        out = th.stack(
+            self.net[0](features),
+            self.branch1(self.net[0:3](features)),
+            self.branch2(self.net[0:4])(features)),
+            self.branch3(self.net[0:5](features)),
+            self.net(features),
+        )
+        return (self.avgpool(out), out)
 
 # class SimpleCNN(nn.Module):
 #     """
