@@ -50,19 +50,19 @@ class FCNwPool(nn.Module):
         ) # the output should be of size (32x14x14)
         self.res0 = nn.Sequential(
             nn.ConvTranspose2d(16, 4, kernel_size=(3,3), stride=(1,1)),
-            nn.ConvTranspose2d(4, 1, kernel_size=(2,2), stride=(1,1)),
+            nn.ConvTranspose2d(4, 1, kernel_size=(3,3), stride=(1,1)),
         )
         self.res1 = nn.Sequential(
             nn.ConvTranspose2d(64, 16, kernel_size=(3,3), stride=(16,16)),
             nn.ConvTranspose2d(16, 4, kernel_size=(3,3), stride=(1,1)),
-            *[nn.ConvTranspose2d(4, 4, kernel_size=(3,3), stride=(1,1)) for i in range(10)],
+            *[nn.ConvTranspose2d(4, 4, kernel_size=(3,3), stride=(1,1)) for i in range(16)],
             nn.ConvTranspose2d(4, 1, kernel_size=(3,3), stride=(1,1)),
         )
         self.res2 = nn.Sequential(
             nn.ConvTranspose2d(256, 64, kernel_size=(3,3), stride=(76, 76)),
             nn.ConvTranspose2d(64, 16, kernel_size=(3,3), stride=(1,1)),
-            nn.ConvTranspose2d(16, 8, kernel_size=(3,3), stride=(1,1)),
-            nn.ConvTranspose2d(8, 1, kernel_size=(2,2), stride=(1,1)),
+            *[nn.ConvTranspose2d(16, 16, kernel_size=(3,3), stride=(1,1)) for i in range(2)],
+            nn.ConvTranspose2d(16, 1, kernel_size=(3,3), stride=(1,1)),
         )
         self.avgpool = nn.AdaptiveAvgPool2d((self.shape[1], self.shape[2]))
 
