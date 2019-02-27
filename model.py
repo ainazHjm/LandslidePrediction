@@ -71,6 +71,9 @@ class FCNwPool(nn.Module):
         out1 = self.net[1:4](out0)
         out2 = self.net[4:](out1)
         print(out0.shape, out1.shape, out2.shape)
+        print(self.res0(out0).shape)
+        print(self.res1(out1).shape)
+        print(self.res2(out2).shape)
         out = th.stack(
             (
                 self.res0(out0),
