@@ -14,6 +14,7 @@ def get_args():
     parser.add_argument("--debug", type=str2bool, default=False)
     parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("--n_epochs", type=int, default=5)
+    # parser.add_argument("--n_iters", type=int, default=20)
     parser.add_argument("--batch_size", type=int, default=4)
     parser.add_argument("--decay", type=float, default=1e-5)
     parser.add_argument("--load_model_path", type=str, default='')
