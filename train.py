@@ -14,7 +14,7 @@ def validate(model, valset):
     label = valset[-1, :, :]
     criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([50]).cuda())
     # criterion = nn.BCEWithLogitsLoss()
-    (predictions, layer_outputs) = model.forward(valset[:-1, :, :].unsqueeze(0).cuda())
+    (predictions, _) = model.forward(valset[:-1, :, :].unsqueeze(0).cuda())
     prds = predictions[0, 0, :, :]
     loss = criterion(
         prds[valset[0, :, :] != -100],
@@ -25,7 +25,7 @@ def validate(model, valset):
 def train(args, train_data, val_data):
     th.cuda.empty_cache()
     (c, h, w) = train_data.shape
-    train_model = model.FCN().cuda() if args.model == "FCN" else model.FCNwPool().cuda()
+    train_model = model.FCN().cuda() if args.model == "FCN" else model.FCNwPool((c, h, w)).cuda()
     if args.load_model_path:
         train_model.load_state_dict(th.load(args.load_model_path).state_dict())
     optimizer = to.Adam(train_model.parameters(), lr = args.lr, weight_decay = args.decay)
@@ -35,38 +35,44 @@ def train(args, train_data, val_data):
     print("model is initialized ...")
 
     running_loss = 0
+    num_iters = (7, 8) # dividing the whole image into 8 patches of size (998x998)
+    hs = h // num_iters[0]
+    ws = w // num_iters[1]
     for i in range(args.n_epochs):
-        optimizer.zero_grad()
+        for j in range(num_iters[0]):
+            for k in range(num_iters[1]):
+                optimizer.zero_grad()
 
-        input_data = train_data[:-1, :, :].unsqueeze(0).cuda()
-        label = train_data[-1, :, :]
-        if input_data.shape != (1, c-1, h, w):
-            raise ValueError("the shape of the input data does not match.")
+                input_data = train_data[:-1, j*hs:(j+1)*hs, k*ws:(k+1)*ws].unsqueeze(0).cuda()
+                # input_data = input_data.unsqueeze(0).cuda()
+                label = train_data[-1, j*hs:(j+1)*hs, k*ws:(k+1)*ws]
+                print(input_data.shape)
+                (predictions, layer_outputs) = train_model.forward(input_data)
+                prds = predictions[0, 0, :, :]
+                print("------ %d" %i)
+                loss = criterion(
+                    prds[train_data[0, :, :] != -100],
+                    label[train_data[0, :, :] != -100].cuda()
+                    )
+
+                print(">> loss: %f" % loss.item())
+                writer.add_scalar("train loss", loss.item(), i)
+                running_loss = running_loss + loss.item()
+
+                v_loss = validate(train_model, val_data)
+                # import ipdb
+                # ipdb.set_trace()
+                print(">> val loss: %f" % v_loss)
+                writer.add_scalar("validation loss", v_loss, i)
+
+                loss.backward()
+                optimizer.step()
+                if args.model == "FCNwPool":
+                    if (i+1) % 20 == 0:
+                        t = ctime()
+                        for idx, out_img in enumerate(layer_outputs):
+                            save_image(out_img, "../output/visualise/CNN/layer"+str(idx)+"_"+t+".jpg")
         
-        (predictions, layer_outputs) = train_model.forward(input_data)
-        if predictions.shape != (1, 1, h, w):
-            raise ValueError("the shape of the output data does not match.")
-        prds = predictions[0, 0, :, :]
-        loss = criterion(
-            prds[train_data[0, :, :] != -100],
-            label[train_data[0, :, :] != -100].cuda()
-            )
-
-        print(">> loss: %f" % loss.item())
-        writer.add_scalar("train loss", loss.item(), i)
-        running_loss = running_loss + loss.item()
-
-        v_loss = validate(train_model, val_data)
-        # import ipdb
-        # ipdb.set_trace()
-        print(">> val loss: %f" % v_loss)
-        writer.add_scalar("validation loss", v_loss, i)
-
-        loss.backward()
-        optimizer.step()
-        if args.model == "FCNwPool":
-            if (i+1) % 20 == 0:
-                save_image(out_img, "../output/visualise/CNN/layer"+idx+"_"+ctime()+".jpg") for idx, out_img in enumertate(layer_outputs)
     th.save(train_model, "../models/CNN/"+ctime().replace("  "," ").replace(" ", "_").replace(":","_")+".pt")
     print("model has been trained and saved.")
     return running_loss/args.n_epochs
