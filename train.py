@@ -35,7 +35,7 @@ def train(args, train_data, val_data):
     print("model is initialized ...")
 
     running_loss = 0
-    num_iters = (7, 8) # dividing the whole image into 56 patches of size (998x998)
+    num_iters = (7, 8) # dividing the whole image into 56 patches of size (999x999)
     hs = h // num_iters[0]
     ws = w // num_iters[1]
     for i in range(args.n_epochs):
