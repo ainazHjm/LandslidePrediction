@@ -54,13 +54,12 @@ class FCNwPool(nn.Module):
         )
         self.res1 = nn.Sequential(
             nn.ConvTranspose2d(64, 16, kernel_size=(3,3), stride=(16,16)),
-            *[nn.ConvTranspose2d(16, 4, kernel_size=(3,3), stride=(1,1)) for i in range(11)],
-            nn.ConvTranspose2d(4, 1, kernel_size=(2,2), stride=(1,1)),
+            *[nn.ConvTranspose2d(16, 4, kernel_size=(3,3), stride=(1,1)) for i in range(12)],
         )
         self.res2 = nn.Sequential(
             nn.ConvTranspose2d(256, 64, kernel_size=(3,3), stride=(76, 76)),
             *[nn.ConvTranspose2d(64, 16, kernel_size=(3,3), stride=(1,1)) for _ in range(2)],
-            nn.ConvTranspose2d(16, 1, kernel_size=(1,1), stride=(1,1)),
+            nn.ConvTranspose2d(16, 1, kernel_size=(2,2), stride=(1,1)),
         )
         self.avgpool = nn.AdaptiveAvgPool2d((self.shape[1], self.shape[2]))
 
