@@ -25,7 +25,7 @@ def validate(model, valset):
 def train(args, train_data, val_data):
     th.cuda.empty_cache()
     (c, h, w) = train_data.shape
-    train_model = model.FCN().cuda() if args.model == "FCN" else model.FCNwPool((c, h, w)).cuda()
+    train_model = model.FCN().cuda() if args.model == "FCN" else model.FCNwPool((c-1, h, w)).cuda()
     if args.load_model_path:
         train_model.load_state_dict(th.load(args.load_model_path).state_dict())
     optimizer = to.Adam(train_model.parameters(), lr = args.lr, weight_decay = args.decay)
@@ -35,7 +35,7 @@ def train(args, train_data, val_data):
     print("model is initialized ...")
 
     running_loss = 0
-    num_iters = (7, 8) # dividing the whole image into 8 patches of size (998x998)
+    num_iters = (7, 8) # dividing the whole image into 56 patches of size (998x998)
     hs = h // num_iters[0]
     ws = w // num_iters[1]
     for i in range(args.n_epochs):
