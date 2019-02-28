@@ -46,71 +46,55 @@ def validate(model, valset):
     return running_loss/((h//hs) * (w//ws))
 
 def train(args, val_data, train_data_path="../image_data/data/CNN/train_data.pt"):
+    '''
+    Trains on a batch of patches of size (4, 999, 999).
+    '''
     th.cuda.empty_cache()
     train_data, train_label = make_patches(train_data_path)
-    # num_iters = (7, 8) # dividing the whole image into 56 patches of size (999x999)
-    # (hs, ws) = (999, 999)
+
     train_model = model.FCN().cuda() if args.model == "FCN" else model.FCNwPool((4, 999, 999)).cuda()
     if args.load_model_path:
         train_model.load_state_dict(th.load(args.load_model_path).state_dict())
+    print("model is initialized ...")
+
     optimizer = to.Adam(train_model.parameters(), lr = args.lr, weight_decay = args.decay)
     scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=5)
-    # criterion = nn.NLLLoss()
     criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([50]).cuda())
-    # criterion = nn.BCEWithLogitsLoss()
-    print("model is initialized ...")
 
     bs = args.batch_size
     num_iters = train_data.shape[0]//bs
     for i in range(args.n_epochs):
         running_loss = 0
-        v_running_loss = 0        
+
         for j in range(num_iters):
             optimizer.zero_grad()
             input_data = train_data[j*bs:(j+1)*bs, :, :, :].cuda()
             label = train_label[j*bs:(j+1)*bs, :, :, :].cuda().squeeze(1)
             predictions = train_model.forward(input_data).squeeze(1)
             indices = input_data[:, 0, :, :] != -100
-            # print(predictions.shape, indices.shape)
+
             if len(predictions[indices]) == 0:
                 continue
+            
             loss = criterion(
                 predictions[indices],
                 label[indices]
                 )
             print(">> loss: %f" % loss.item())
             running_loss += loss.item()
-            v_loss = validate(train_model, val_data)
-            v_running_loss += v_loss
-            # import ipdb
-            # ipdb.set_trace()
-            print(">> val loss: %f" % v_loss)
 
             loss.backward()
             optimizer.step()
         
-                
-            # writer.add_scalar("train loss", loss.item(), i*num_iters+j)
-            # writer.add_scalar("validation loss", v_loss, i*num_iters+j)
-        scheduler.step(v_running_loss/(num_iters*bs))
+        v_loss = validate(train_model, val_data)
+        scheduler.step(v_loss)
+
         writer.add_scalar("train loss", running_loss/(num_iters*bs), i)
-        writer.add_scalar("validation loss", v_running_loss/(num_iters*bs), i)
+        writer.add_scalar("validation loss", v_loss, i)
         
     th.save(train_model, "../models/CNN/"+ctime().replace("  "," ").replace(" ", "_").replace(":","_")+".pt")
     print("model has been trained and saved.")
-    return running_loss/(num_iters*args.n_epochs*bs)
-
-# def find_accuracy(model, data):
-#     predictions = model(data[:-1, :, :].unsqueeze(0).cuda()).view(-1)
-#     print(th.sum(predictions > 0.5), th.sum(predictions <= 0.5))
-#     predictions[predictions > 0.5] = 1
-#     predictions[predictions <= 0.5] = 0
-#     print(predictions)
-#     acc = th.sum(data[-1, :, :].long().view(-1).cuda() == predictions.long())
-#     print(acc, predictions.shape)
-#     print(data[-1, :, :].long())
-#     print(th.sum(data[-1, :, :].long().view(-1).cuda() == 1))
-#     return acc/predictions.shape[0]
+    return running_loss/(num_iters*bs)
 
 def cross_validate(args, data):
     '''

@@ -29,12 +29,14 @@ def main():
         # the data that is loaded is standardized with mean 0 and std 1
         val_data = th.load("../image_data/data/CNN/val_data.pt")
         val_idx = np.load("../image_data/data/CNN/val_idx.npy")
-    # td, vd = normalize(train_data, val_data) # the data is normalized before
+    
     if args.validate:
         print("loading a trained model...")
         model = th.load(args.load_model_path)
         save_results(model, val_data)
+        print("model is validated and the results are saved.")
     else:
+        print("starting to train ...")
         train(args, val_data)
 
 if __name__ == "__main__":
