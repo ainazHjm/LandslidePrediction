@@ -1,6 +1,6 @@
 # pylint: disable=E0611
 from data import process, normalize
-from train import train, find_accuracy, cross_validate
+from train import train, cross_validate
 import argparse
 import torch as th
 import numpy as np
@@ -14,12 +14,9 @@ def get_args():
     parser.add_argument("--debug", type=str2bool, default=False)
     parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("--n_epochs", type=int, default=5)
-    # parser.add_argument("--n_iters", type=int, default=20)
-    parser.add_argument("--batch_size", type=int, default=4)
+    parser.add_argument("--batch_size", type=int, default=5)
     parser.add_argument("--decay", type=float, default=1e-5)
     parser.add_argument("--load_model_path", type=str, default='')
-    # parser.add_argument("--retrain_model", type=str2bool, default=False)
-    # parser.add_argument("--save_features", type=str2bool, default=False)
     parser.add_argument("--validate", type=str2bool, default=False)
     return parser.parse_args()
 
@@ -32,14 +29,13 @@ def main():
         # the data that is loaded is standardized with mean 0 and std 1
         val_data = th.load("../image_data/data/CNN/val_data.pt")
         val_idx = np.load("../image_data/data/CNN/val_idx.npy")
-        train_data = th.load("../image_data/data/CNN/train_data.pt")
     # td, vd = normalize(train_data, val_data) # the data is normalized before
     if args.validate:
         print("loading a trained model...")
         model = th.load(args.load_model_path)
         save_results(model, val_data)
     else:
-        loss = train(args, train_data, val_data)
+        train(args, val_data)
 
 if __name__ == "__main__":
     main()

@@ -14,7 +14,7 @@ class FCN(nn.Module):
             nn.Conv2d(8, 1, kernel_size=(3,3), stride=(1,1))
         )
     def forward(self, features):
-        return (self.net(features), 'FCN')
+        return self.net(features)
 
 '''
 TODO: implement resnet
@@ -47,7 +47,7 @@ class FCNwPool(nn.Module):
             nn.MaxPool2d(kernel_size=(4,4), stride=(4,4)),
             FCNBasicBlock(64, 128, 256),
             nn.MaxPool2d(kernel_size=(4,4), stride=(4,4)),
-        ) # the output should be of size (32x14x14)
+        )
         self.res0 = nn.Sequential(
             nn.ConvTranspose2d(16, 4, kernel_size=(3,3), stride=(1,1)),
             nn.ConvTranspose2d(4, 1, kernel_size=(3,3), stride=(1,1)),
@@ -64,16 +64,12 @@ class FCNwPool(nn.Module):
             *[nn.ConvTranspose2d(16, 16, kernel_size=(3,3), stride=(1,1)) for i in range(2)],
             nn.ConvTranspose2d(16, 1, kernel_size=(3,3), stride=(1,1)),
         )
-        self.avgpool = nn.AdaptiveAvgPool2d((self.shape[1], self.shape[2]))
+        # self.avgpool = nn.AdaptiveAvgPool2d((self.shape[1], self.shape[2]))
 
     def forward(self, x):
         out0 = self.net[0](x)
         out1 = self.net[1:4](out0)
         out2 = self.net[4:](out1)
-        print(out0.shape, out1.shape, out2.shape)
-        print(self.res0(out0).shape)
-        print(self.res1(out1).shape)
-        print(self.res2(out2).shape)
         out = th.stack(
             (
                 self.res0(out0),
@@ -81,7 +77,7 @@ class FCNwPool(nn.Module):
                 self.res2(out2)
             )
         )
-        return (self.avgpool(out), out)
+        return th.sum(out,0)
 
 # class SimpleCNN(nn.Module):
 #     """
