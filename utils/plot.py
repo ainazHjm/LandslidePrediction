@@ -12,17 +12,20 @@ def save_results(model, val_data):
     th.cuda.empty_cache()
     sig = Sigmoid()
     (_, h, w) = val_data.shape
+    print(h, w)
     (hs, ws) = (999, 999)
-    predictions = th.zeros(h, w)
+    predictions = th.zeros(hs*(h//hs), ws*(w//ws))
     for i in range(h//hs):
         for j in range(w//ws):
             input_data = val_data[:-1, i*hs:(i+1)*hs, j*ws:(j+1)*ws].unsqueeze(0).cuda()
+            indices = input_data[0, 0, :, :] == -100
             predictions[i*hs:(i+1)*hs, j*ws:(j+1)*ws] = sig(model.forward(input_data).squeeze(0).squeeze(0)).detach()
-    input_data = val_data[:-1, (h//hs)*hs:, (w//ws)*ws:].unsqueeze(0).cuda()
-    predictions[hs*(h//hs):, ws*(w//ws):] = sig(model.forward(input_data).squeeze(0).squeeze(0)).detach()
+            predictions[i*hs:(i+1)*hs, j*ws:(j+1)*ws][indices] = 0
+    # input_data = val_data[:-1, (h//hs)*hs:, (w//ws)*ws:].unsqueeze(0).cuda()
+    # predictions[hs*(h//hs):, ws*(w//ws):] = sig(model.forward(input_data).squeeze(0).squeeze(0)).detach()
     name = ctime()
-    save(predictions, "../output/"+name+".pt")
-    save_image(predictions, "output/"+name+".jpg")
+    save(predictions, "../output/CNN/"+name.replace("  "," ").replace(" ", "_").replace(":","_")+".pt")
+    save_image(predictions, "../output/CNN/"+name.replace("  "," ").replace(" ", "_").replace(":","_")+".jpg")
 
 def magnify(img_path = "../image_data/veneto_new_version/n_label.tif"):
     im = Image.open(img_path)
