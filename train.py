@@ -28,7 +28,7 @@ def make_patches(train_data_path, window=999):
 def validate(model, valset):
     (hs, ws) = (999, 999)
     (_, h, w) = valset.shape
-    criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([50]).cuda())
+    criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([500]).cuda())
     running_loss = 0
     for i in range(h//hs):
         for j in range(w//ws):
@@ -59,7 +59,7 @@ def train(args, val_data, train_data_path="../image_data/data/CNN/train_data.pt"
 
     optimizer = to.Adam(train_model.parameters(), lr = args.lr, weight_decay = args.decay)
     scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=5)
-    criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([50]).cuda())
+    criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([500]).cuda())
 
     bs = args.batch_size
     num_iters = train_data.shape[0]//bs
@@ -88,7 +88,7 @@ def train(args, val_data, train_data_path="../image_data/data/CNN/train_data.pt"
         
         v_loss = validate(train_model, val_data)
         scheduler.step(v_loss)
-
+        print("--- validation loss: %f" % v_loss)
         writer.add_scalar("train loss", running_loss/(num_iters*bs), i)
         writer.add_scalar("validation loss", v_loss, i)
         

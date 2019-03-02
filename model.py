@@ -24,8 +24,10 @@ class FCNBasicBlock(nn.Module):
         super(FCNBasicBlock, self).__init__()
         self.net = nn.Sequential(
             nn.Conv2d(in_channel, mid_channel, kernel_size=(3,3), stride=(1,1)),
+            # nn.BatchNorm2d(mid_channel),
             nn.ReLU(),
             nn.Conv2d(mid_channel, out_channel, kernel_size=(3,3), stride=(1,1)),
+            # nn.BatchNorm2d(out_channel),
             nn.ReLU()
         )
     def forward(self, x):
