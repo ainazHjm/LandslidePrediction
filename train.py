@@ -24,6 +24,11 @@ def make_patches(train_data_path, window=999):
             label[i*wnum+j, :, :, :] = train_data[-1, i*window:(i+1)*window, j*window:(j+1)*window]
     return input_data, label
 
+def risk_classifier(pos_batch, unlabeled_batch, pi, loss=nn.SoftMarginLoss()):
+    '''
+    softmargin loss is the logistic loss
+    '''
+    pu_risk = pi*th.sum()
 
 def validate(model, valset):
     (hs, ws) = (999, 999)
