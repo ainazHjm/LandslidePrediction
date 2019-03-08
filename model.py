@@ -72,6 +72,7 @@ class FCNwPool(nn.Module):
             nn.ConvTranspose2d(16, 1, kernel_size=(3,3), stride=(1,1)),
         )
         # self.avgpool = nn.AdaptiveAvgPool2d((self.shape[1], self.shape[2]))
+        self.last = nn.Conv2d(3, 1, kernel_size=(1,1), stride=(1,1))
 
     def forward(self, x):
         out0 = self.net[0](x)
@@ -84,4 +85,9 @@ class FCNwPool(nn.Module):
                 self.res2(out2)
             )
         )
-        return th.sum(out,0)
+        # trying weighted out instead of sum 
+        # th.sum(out,0)
+        print(out.shape)
+        fx = self.last(out.view(-1, 3, shape[1], shape[2]))
+        print(fx.shape)
+        return fx
