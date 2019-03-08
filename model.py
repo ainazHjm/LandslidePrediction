@@ -87,7 +87,7 @@ class FCNwPool(nn.Module):
         )
         # trying weighted out instead of sum 
         # th.sum(out,0)
-        #print(out.shape)
-        #fx = self.last(out.view(-1, 3, shape[1], shape[2]))
-        #print(fx.shape)
+        print(out.shape)
+        fx = self.last(out.view(-1, 3, shape[1], shape[2]))
+        print(fx.shape)
         return th.sum(out, 0)
