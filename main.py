@@ -27,8 +27,8 @@ def main():
         train_data, val_data, val_idx = cross_validate(args, data)
     else:
         # the data that is loaded is standardized with mean 0 and std 1
-        val_data = th.load("../image_data/data/CNN/val_data.pt")
-        val_idx = np.load("../image_data/data/CNN/val_idx.npy")
+        val_data = th.load("../image_data/data/Veneto/val_data.pt")
+        val_idx = np.load("../image_data/data/Veneto/val_idx.npy")
     
     if args.validate:
         print("loading a trained model...")

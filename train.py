@@ -45,7 +45,7 @@ def validate(model, valset):
             running_loss += loss.item()
     return running_loss/((h//hs) * (w//ws))
 
-def train(args, val_data, train_data_path="../image_data/data/CNN/train_data.pt"):
+def train(args, val_data, train_data_path="../image_data/data/Veneto/train_data.pt"):
     '''
     Trains on a batch of patches of size (4, 999, 999).
     '''
