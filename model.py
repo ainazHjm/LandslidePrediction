@@ -1,6 +1,7 @@
 # pylint: disable=E1101
 import torch.nn as nn
 import torch as th
+import torch.nn.functional as F
 
 class FCN(nn.Module):
     def __init__(self):
@@ -76,29 +77,51 @@ class FCNwPool(nn.Module):
         # self.last = nn.Conv2d(3, 1, kernel_size=(1,1), stride=(1,1))
         self.last = nn.Conv2d(15, 1, kernel_size=(1,1), stride=(1,1))
 
-    def pad_image(self, image, padding, padding_value=0):
-        (h, w) = image.shape
-        n_image = padding_value * th.ones(h+2*padding, w+2*padding)
-        n_image[padding:h+padding, padding:w+padding] = image
-        res = th.zeros(5, h, w)
-        for i in range(padding, h+padding):
-            for j in range(padding, w+padding):
-                res[:, i-padding, j-padding] = th.stack(
-                    n_image[i-padding, j],
-                    n_image[i, j+padding],
-                    n_image[i-padding, j],
-                    n_image[i, j-padding],
-                    n_image[i, j]
-                )
-        return res
+    # def pad_image(self, image, padding, padding_value=0):
+    #     (h, w) = image.shape
+    #     n_image = padding_value * th.ones(h+2*padding, w+2*padding)
+    #     n_image[padding:h+padding, padding:w+padding] = image
+    #     res = th.zeros(5, h, w)
+    #     for i in range(padding, h+padding):
+    #         for j in range(padding, w+padding):
+    #             res[:, i-padding, j-padding] = th.stack(
+    #                 n_image[i-padding, j],
+    #                 n_image[i, j+padding],
+    #                 n_image[i-padding, j],
+    #                 n_image[i, j-padding],
+    #                 n_image[i, j]
+    #             )
+    #     return res
+    
+    def create_mask(self, padding):
+        kernel = th.zeros(2*padding+1, 2*padding+1)
+        kernel[0, padding] = 1
+        kernel[padding, 0] = 1
+        kernel[padding, -1] = 1
+        kernel[-1, padding] = 1
+        return kernel
 
     def get_neighbors(self, features, pixel_res):
         (b, c, h, w) = features.shape # c should be 3 because we have three different resolutions
         n_features = (b, c*5, h, w)
-        for i in range(b):
-            n_features[i, 0:5, :, :] = self.pad_image(features[i, 0, :, :], 20//pixel_res + 1)
-            n_features[i, 5:10, :, :] = self.pad_image(features[i, 1, :, :], 160//pixel_res + 1)
-            n_features[i, 10:, :, :] = self.pad_image(features[i, 2, :, :], 640//pixel_res + 1)
+        # k0 = create_mask(20//pixel_res + 1)
+        # k1 = create_mask(160//pixel_res + 1)
+        # k2 = create_mask(640//pixel_res + 1)
+        n_features[:, 0:5, :, :] = F.conv2d(
+            features[:, 0, :, :],
+            create_mask(20//pixel_res + 1),
+            padding=20//pixel_res + 1
+            )
+        n_features[:, 5:10, :, :] = F.conv2d(
+            features[:, 1, :, :],
+            create_mask(160//pixel_res + 1),
+            padding=160//pixel_res + 1
+            )
+        n_features[:, 5:10, :, :] = F.conv2d(
+            features[:, 2, :, :],
+            create_mask(640//pixel_res + 1),
+            padding=640//pixel_res + 1
+            )
         return n_features
 
     def forward(self, x):
