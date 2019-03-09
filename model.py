@@ -102,6 +102,7 @@ class FCNwPool(nn.Module):
         return kernel
 
     def get_neighbors(self, features, pixel_res):
+        print(features.shape)
         (b, c, h, w) = features.shape # c should be 3 because we have three different resolutions
         n_features = (b, c*5, h, w)
         # k0 = create_mask(20//pixel_res + 1)
@@ -128,14 +129,13 @@ class FCNwPool(nn.Module):
         out0 = self.net[0](x)
         out1 = self.net[1:4](out0)
         out2 = self.net[4:](out1)
-        out = th.stack(
-            (
-                self.res0(out0),
-                self.res1(out1),
-                self.res2(out2)
-            )
-        )
+        out = th.stack((
+            self.res0(out0),
+            self.res1(out1),
+            self.res2(out2)
+        )).view(-1, 3, self.shape[1], self.shape[2])
         # fx = self.last(out.view(-1, 3, shape[1], shape[2]))
+        print(out.shape)
         fx = self.last(self.get_neighbors(out, self.pixel_res))
         print(fx.shape)
         return fx
