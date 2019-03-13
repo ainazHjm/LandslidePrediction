@@ -94,34 +94,38 @@ class FCNwPool(nn.Module):
     #     return res
     
     def create_mask(self, padding):
-        kernel = th.zeros(2*padding+1, 2*padding+1)
-        kernel[0, padding] = 1
-        kernel[padding, 0] = 1
-        kernel[padding, -1] = 1
-        kernel[-1, padding] = 1
-        return kernel
+        kernel = th.zeros(5, 1, 2*padding+1, 2*padding+1)
+        kernel[0, 0, 0, padding] = 1
+        kernel[1, 0, padding, 0] = 1
+        kernel[2, 0, padding, -1] = 1
+        kernel[3, 0, -1, padding] = 1
+        kernel[-1, 0, padding, padding] = 1
+        #print("kernel shape:")
+        #print(kernel.shape)
+        return kernel.cuda()
 
     def get_neighbors(self, features, pixel_res):
-        print(features.shape)
+        # print(features.shape)
         (b, c, h, w) = features.shape # c should be 3 because we have three different resolutions
-        n_features = (b, c*5, h, w)
+        n_features = th.zeros(b, c*5, h, w).cuda()
         # k0 = create_mask(20//pixel_res + 1)
         # k1 = create_mask(160//pixel_res + 1)
         # k2 = create_mask(640//pixel_res + 1)
+        #print((20//pixel_res + 1,20//pixel_res + 1))
         n_features[:, 0:5, :, :] = F.conv2d(
-            features[:, 0, :, :],
-            create_mask(20//pixel_res + 1),
-            padding=20//pixel_res + 1
+            features[:, 0, :, :].view(-1, 1, h, w),
+            self.create_mask(20//pixel_res + 1),
+            padding=20//pixel_res + 1,
             )
         n_features[:, 5:10, :, :] = F.conv2d(
-            features[:, 1, :, :],
-            create_mask(160//pixel_res + 1),
-            padding=160//pixel_res + 1
+            features[:, 1, :, :].view(-1, 1, h, w),
+            self.create_mask(160//pixel_res + 1),
+            padding=160//pixel_res + 1,
             )
         n_features[:, 5:10, :, :] = F.conv2d(
-            features[:, 2, :, :],
-            create_mask(640//pixel_res + 1),
-            padding=640//pixel_res + 1
+            features[:, 2, :, :].view(-1, 1, h, w),
+            self.create_mask(640//pixel_res + 1),
+            padding=640//pixel_res + 1,
             )
         return n_features
 
@@ -135,7 +139,8 @@ class FCNwPool(nn.Module):
             self.res2(out2)
         )).view(-1, 3, self.shape[1], self.shape[2])
         # fx = self.last(out.view(-1, 3, shape[1], shape[2]))
-        print(out.shape)
+        #print("out shape:")
+        #print(out.shape)
         fx = self.last(self.get_neighbors(out, self.pixel_res))
-        print(fx.shape)
+        # print(fx.shape)
         return fx
