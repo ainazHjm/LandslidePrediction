@@ -27,7 +27,7 @@ def save_results(model, val_data):
     save(predictions, "../output/CNN/"+name.replace("  "," ").replace(" ", "_").replace(":","_")+".pt")
     save_image(predictions, "../output/CNN/"+name.replace("  "," ").replace(" ", "_").replace(":","_")+".jpg")
 
-def magnify(img_path = "../image_data/veneto_new_version/n_label.tif"):
+def magnify(img_path = "/home/ainaz/Projects/Landslides/image_data/Veneto/veneto_label.tif"):
     im = Image.open(img_path)
     im = np.array(im)
     im[im == 100] = 0
@@ -36,9 +36,9 @@ def magnify(img_path = "../image_data/veneto_new_version/n_label.tif"):
     for i in range(len(indices[0])):
         r = indices[0][i]
         c = indices[1][i]
-        im[r-2:r+3, c-2:c+3] = 1
+        im[r-4:r+5, c-4:c+5] = 1
     im = th.from_numpy(im)
-    save_image(im, "../vis_res/n_label_magnified5x5.tif")
+    save_image(im, "/home/ainaz/Projects/Landslides/visualise/CNN/n_label_magnified9x9.tif")
 
 def vis_res(prd_path, bg_img_path):
     paste_loc = (1999, 0)

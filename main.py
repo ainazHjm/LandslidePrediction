@@ -20,6 +20,22 @@ def get_args():
     parser.add_argument("--validate", type=str2bool, default=False)
     return parser.parse_args()
 
+def concat_data(val_idx, val_data, train_data=th.load("../image_data/data/Veneto/train_data.pt")):
+    s = train_data.shape[2]//4
+    # data = th.zeros(train_data.shape[0], train_data.shape[1], train_data.shape[2]+val_data.shape[2])
+    # data[]
+    d = th.cat(
+            (
+                th.cat(
+                    (train_data[:, :, 0:val_idx*s], val_data),
+                    dim=2
+                ),
+                train_data[:, :, val_idx*s:]
+            ),
+            dim=2
+        )
+    return d
+
 def main():
     args = get_args()
     if args.cross_validation:
@@ -34,6 +50,9 @@ def main():
         print("loading a trained model...")
         model = th.load(args.load_model_path)
         save_results(model, val_data)
+        print("validating on the whole dataset ...")
+        data = concat_data(val_idx, val_data)
+        save_results(model, data)
         print("model is validated and the results are saved.")
     else:
         print("starting to train ...")
