@@ -69,10 +69,10 @@ def train(args, val_data, train_data_path="../image_data/data/Veneto/train_data.
         for j in range(num_iters):
             optimizer.zero_grad()
             input_data = train_data[j*bs:(j+1)*bs, :, :, :].cuda()
-            label = train_label[j*bs:(j+1)*bs, :, :, :].cuda().squeeze(1)
-            predictions = train_model.forward(input_data).squeeze(1)
-            indices = input_data[:, 0, :, :] != -100
-
+            label = train_label[j*bs:(j+1)*bs, :, :, :].cuda()
+            predictions = train_model.forward(input_data)
+            indices = (input_data[:, 0, :, :] != -100).unsqueeze(1)
+            # import ipdb ; ipdb.set_trace()
             if len(predictions[indices]) == 0:
                 continue
             
@@ -80,6 +80,7 @@ def train(args, val_data, train_data_path="../image_data/data/Veneto/train_data.
                 predictions[indices],
                 label[indices]
                 )
+            # import ipdb ; ipdb.set_trace()
             print(">> loss: %f" % loss.item())
             running_loss += loss.item()
 
