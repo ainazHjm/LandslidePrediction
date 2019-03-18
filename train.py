@@ -83,7 +83,6 @@ def train(args, val_data, train_data_path="../image_data/data/Veneto/train_data.
             # import ipdb ; ipdb.set_trace()
             print(">> loss: %f" % loss.item())
             running_loss += loss.item()
-
             loss.backward()
             optimizer.step()
         
