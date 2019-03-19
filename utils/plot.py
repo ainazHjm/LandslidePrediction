@@ -25,7 +25,7 @@ def save_results(model, val_data):
     # predictions[hs*(h//hs):, ws*(w//ws):] = sig(model.forward(input_data).squeeze(0).squeeze(0)).detach()
     name = ctime()
     save(predictions, "../output/CNN/"+name.replace("  "," ").replace(" ", "_").replace(":","_")+".pt")
-    save_image(predictions, "../output/CNN/"+name.replace("  "," ").replace(" ", "_").replace(":","_")+".jpg")
+    save_image(predictions, "../output/CNN/"+name.replace("  "," ").replace(" ", "_").replace(":","_")+".tif")
 
 def magnify(img_path = "../image_data/veneto_new_version/n_label.tif"):
     im = Image.open(img_path)
