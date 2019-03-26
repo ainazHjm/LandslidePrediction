@@ -123,7 +123,7 @@ class FCNwPool(nn.Module):
 
         n_features[:, 0:5, :, :] = F.conv2d(
             features[:, 0, :, :].view(-1, 1, h, w),
-            self.create_mask(10//pixel_res + 1),
+            self.create_mask(10//pixel_res) + 1),
             padding=10//pixel_res + 1,
             )
         n_features[:, 5:10, :, :] = F.conv2d(
