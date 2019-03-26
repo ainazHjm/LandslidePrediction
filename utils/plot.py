@@ -18,7 +18,8 @@ def save_results(model, val_data):
     for i in range(h//hs):
         for j in range(w//ws):
             input_data = val_data[:-1, i*hs:(i+1)*hs, j*ws:(j+1)*ws].unsqueeze(0).cuda()
-            indices = input_data[0, 0, :, :] == -100
+            # indices = input_data[0, 0, :, :] == -100
+            indices = th.isnan(input_data[0, 0, :, :])
             predictions[i*hs:(i+1)*hs, j*ws:(j+1)*ws] = sig(model.forward(input_data).squeeze(0).squeeze(0)).detach()
             predictions[i*hs:(i+1)*hs, j*ws:(j+1)*ws][indices] = 0
     # input_data = val_data[:-1, (h//hs)*hs:, (w//ws)*ws:].unsqueeze(0).cuda()

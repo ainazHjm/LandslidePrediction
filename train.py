@@ -24,7 +24,6 @@ def make_patches(train_data_path, window=999):
             label[i*wnum+j, :, :, :] = train_data[-1, i*window:(i+1)*window, j*window:(j+1)*window]
     return input_data, label
 
-
 def validate(model, valset):
     (hs, ws) = (999, 999)
     (_, h, w) = valset.shape
@@ -35,7 +34,8 @@ def validate(model, valset):
             label = valset[-1, i*hs:(i+1)*hs, j*ws:(j+1)*ws].cuda()
             input_data = valset[:-1, i*hs:(i+1)*hs, j*ws:(j+1)*ws].unsqueeze(0).cuda()
             predictions = model.forward(input_data).squeeze(0).squeeze(0)
-            indices = input_data[0, 0, :, :] != -100
+            # indices = input_data[0, 0, :, :] != -100
+            indices = 1 - th.isnan(input_data[0, 0, :, :])
             if len(predictions[indices]) == 0:
                 continue
             loss = criterion(
@@ -45,13 +45,24 @@ def validate(model, valset):
             running_loss += loss.item()
     return running_loss/((h//hs) * (w//ws))
 
+def sanity_check(model, train_data, train_label, valset, criterion):
+    v_loss = validate(model, valset)
+    t_loss = 0
+    for i in range(train_data.shape[0]):
+        in_data = train_data[i, :, :, :].cuda()
+        label = train_label[i, :, :, :].cuda()
+        indices = 1 - th.isnan(in_data)
+        predictions = model.forward(in_data)
+        t_loss += criterion(predictions[indices], label[indices]).item()
+    t_loss = t_loss / train_data.shape[0]
+    print("running loss for before training >> val: %f train: %f" %(v_loss, t_loss))
+
 def train(args, val_data, train_data_path="../image_data/data/Veneto/train_data.pt"):
     '''
     Trains on a batch of patches of size (4, 999, 999).
     '''
     th.cuda.empty_cache()
     train_data, train_label = make_patches(train_data_path)
-
     train_model = model.FCN().cuda() if args.model == "FCN" else model.FCNwPool((4, 999, 999)).cuda()
     if args.load_model_path:
         train_model.load_state_dict(th.load(args.load_model_path).state_dict())
@@ -63,15 +74,18 @@ def train(args, val_data, train_data_path="../image_data/data/Veneto/train_data.
 
     bs = args.batch_size
     num_iters = train_data.shape[0]//bs
+    sanity_check(train_model, train_data, train_label, val_data, criterion)
+
     for i in range(args.n_epochs):
         running_loss = 0
-
         for j in range(num_iters):
             optimizer.zero_grad()
             input_data = train_data[j*bs:(j+1)*bs, :, :, :].cuda()
             label = train_label[j*bs:(j+1)*bs, :, :, :].cuda()
             predictions = train_model.forward(input_data)
-            indices = (input_data[:, 0, :, :] != -100).unsqueeze(1)
+            # indices = (input_data[:, 0, :, :] != -100).unsqueeze(1)
+            indices = 1 - th.isnan(input_data[:, 0, :, :])
+            indices = indices.unsqueeze(1)
             # import ipdb ; ipdb.set_trace()
             if len(predictions[indices]) == 0:
                 continue
