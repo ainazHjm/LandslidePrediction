@@ -23,31 +23,26 @@ TODO: implement resnet
 class FCNBasicBlock(nn.Module):
     def __init__(self, in_channel, mid_channel, out_channel):
         super(FCNBasicBlock, self).__init__()
-        self.in_channel = in_channel
-        self.mid_channel = mid_channel
-        self.out_channel = out_channel
+        self.conv1 = nn.Conv2d(in_channel, mid_channel, kernel_size=(3,3), stride=(1,1))
+        self.conv2 = nn.Conv2d(mid_channel, out_channel, kernel_size=(3,3), stride=(1,1))
+        self.projection1 = nn.Linear(mid_channel, mid_channel)
+        self.projection2 = nn.Linear(out_channel, out_channel)
 
-    def batchNormNet(self, x, eps=1e-5):
+    def batchNormNet(self, x, projection, eps=1e-5):
         (n, c, h, w) = x.shape
-        indices = x[:, 0, :, :] != -100 # only care about the pixels that we have data points for
+        indices = 1 - th.isnan(x) # only care about the pixels that we have data points for
+        # import ipdb; ipdb.set_trace()
         input_data = x[indices].view(-1, c)
-        curr_batch_size = input_data.shape[0]
-        
         mean = th.mean(input_data, 0) # this is a vector of size c
         var = th.var(input_data, 0) # this is also a vector of size c
-        normalized_data = -100 * th.ones(n, c, h, w)
-        normalized_data[indices] = (x[indices]-mean)/th.sqrt(var+eps)
-        projection = nn.Linear(c, c)
+        # import ipdb; ipdb.set_trace()
+        normalized_data = th.div(th.sub(x.view(-1, c), mean), th.sqrt(var+eps))
         output = projection(normalized_data) # this has the same shape as the input (batch_size x c)
-        return output # output should have the same size as input (n, c, h, w)
+        return output.view(n, c, h, w) # output should have the same size as input (n, c, h, w)
 
     def forward(self, x):
-        conv1 = nn.Conv2d(self.in_channel, self.mid_channel, kernel_size=(3,3), stride=(1,1))
-        conv2 = nn.Conv2d(self.mid_channel, self.out_channel, kernel_size=(3,3), stride=(1,1))
-        data = F.relu(self.batchNormNet(conv1(x)))
-        return F.relu(self.batchNormNet(conv2(data)))
-
-
+        data = F.relu(self.batchNormNet(self.conv1(x), self.projection1))
+        return F.relu(self.batchNormNet(self.conv2(data), self.projection2))
 
 class FCNwPool(nn.Module):
     '''
@@ -66,7 +61,7 @@ class FCNwPool(nn.Module):
         self.shape = shape # CxHxW
         self.pixel_res = pixel_res
         self.net = nn.Sequential(
-            FCNBasicBlock(shape[0], 8, 16),
+            FCNBasicBlock(shape[0], 8, 16,),
             nn.MaxPool2d(kernel_size=(4,4), stride=(4,4)),
             FCNBasicBlock(16, 32, 64),
             nn.MaxPool2d(kernel_size=(4,4), stride=(4,4)),
@@ -89,7 +84,7 @@ class FCNwPool(nn.Module):
                 for i in range(4)
             ],
             *[
-                nn.ConvTranspose2d(2**(2-i), 2**(1-i), kernel_size=(4,4), stride=(1,1)) if 2-i != 0
+                nn.ConvTranspose2d(2**(2-i), 2**(1-i), kernel_size=(4,4), stride=(1,1)) if 2-i > 0
                 else nn.ConvTranspose2d(1, 1, kernel_size=(4,4), stride=(1,1))
                     for i in range(5)
             ],
@@ -100,7 +95,7 @@ class FCNwPool(nn.Module):
                 for i in range(6)
             ],
             *[
-                nn.ConvTranspose2d(2**(3-i), 2**(2-i), kernel_size=(4,4), stride=(1,1)) if 3-i != 0
+                nn.ConvTranspose2d(2**(3-i), 2**(2-i), kernel_size=(4,4), stride=(1,1)) if 3-i > 0
                 else nn.ConvTranspose2d(1, 1, kernel_size=(4,4), stride=(1,1))
                     for i in range(33)
             ],
