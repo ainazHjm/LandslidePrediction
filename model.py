@@ -81,7 +81,7 @@ class FCNwPool(nn.Module):
         self.res2 = nn.Sequential(
             *[
                 nn.ConvTranspose2d(2**(6-i), 2**(5-i), kernel_size=(2,2), stride=(2,2)) 
-                for i in range(4)
+                    for i in range(4)
             ],
             *[
                 nn.ConvTranspose2d(2**(2-i), 2**(1-i), kernel_size=(4,4), stride=(1,1)) if 2-i > 0
