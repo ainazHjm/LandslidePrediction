@@ -29,15 +29,22 @@ class FCNBasicBlock(nn.Module):
         self.projection2 = nn.Linear(out_channel, out_channel)
 
     def batchNormNet(self, x, projection, eps=1e-5):
+        # print(x.shape)
         (n, c, h, w) = x.shape
-        indices = 1 - th.isnan(x) # only care about the pixels that we have data points for
-        # import ipdb; ipdb.set_trace()
-        input_data = x[indices].view(-1, c)
+        x = x.view(-1, c)
+        # print((x == th.tensor(float("-inf")).cuda()).nonzero())
+        
+        indices = th.isnan(x) + (x == th.tensor(float("-inf")).cuda()) + (x == th.tensor(float("inf")).cuda())
+        indices = 1 - indices
+        indices = (th.sum(indices, 1) == c).nonzero().view(-1)
+        # indices = th.tensor(list(set(range(x.shape[0])) - set(ignore))).cuda() if len(ignore)!=0 else th.tensor(list(range(x.shape[0]))).cuda()
+        # indices = th.tensor([e for e in range(x.shape[0]) if e not in ignore]).cuda()
+        input_data = th.index_select(x, 0, indices)
         mean = th.mean(input_data, 0) # this is a vector of size c
         var = th.var(input_data, 0) # this is also a vector of size c
         # import ipdb; ipdb.set_trace()
-        normalized_data = th.div(th.sub(x.view(-1, c), mean), th.sqrt(var+eps))
-        output = projection(normalized_data) # this has the same shape as the input (batch_size x c)
+        normalized_data = th.div(th.sub(x, mean), th.sqrt(var+eps))
+        output = projection(normalized_data) # this has the same shape as the input (-1 x c)
         return output.view(n, c, h, w) # output should have the same size as input (n, c, h, w)
 
     def forward(self, x):
@@ -77,6 +84,7 @@ class FCNwPool(nn.Module):
             nn.ConvTranspose2d(8, 4, kernel_size=(2,2), stride=(2,2)),
             nn.ConvTranspose2d(4, 2, kernel_size=(4,4), stride=(1,1)),
             nn.ConvTranspose2d(2, 1, kernel_size=(4,4), stride=(1,1)),
+            nn.ConvTranspose2d(1, 1, kernel_size=(2,2), stride=(1,1)),
         )
         self.res2 = nn.Sequential(
             *[
@@ -86,8 +94,9 @@ class FCNwPool(nn.Module):
             *[
                 nn.ConvTranspose2d(2**(2-i), 2**(1-i), kernel_size=(4,4), stride=(1,1)) if 2-i > 0
                 else nn.ConvTranspose2d(1, 1, kernel_size=(4,4), stride=(1,1))
-                    for i in range(5)
+                    for i in range(7)
             ],
+            nn.ConvTranspose2d(1, 1, kernel_size=(3,3), stride=(1,1)),
         )
         self.res3 = nn.Sequential(
             *[
@@ -95,9 +104,9 @@ class FCNwPool(nn.Module):
                 for i in range(6)
             ],
             *[
-                nn.ConvTranspose2d(2**(3-i), 2**(2-i), kernel_size=(4,4), stride=(1,1)) if 3-i > 0
+                nn.ConvTranspose2d(2**(2-i), 2**(1-i), kernel_size=(4,4), stride=(1,1)) if 2-i > 0
                 else nn.ConvTranspose2d(1, 1, kernel_size=(4,4), stride=(1,1))
-                    for i in range(33)
+                    for i in range(34)
             ],
             nn.ConvTranspose2d(1, 1, kernel_size=(2,2), stride=(1,1)),
         )
@@ -148,6 +157,11 @@ class FCNwPool(nn.Module):
         out1 = self.net[1](out0)
         out2 = self.net[2:4](out1)
         out3 = self.net[4:6](out2)
+        # print(out0.shape, out1.shape, out2.shape, out3.shape)
+        # print(self.res0(out0).shape)
+        # print(self.res1(out1).shape)
+        # print(self.res2(out2).shape)
+        # print(self.res3(out3).shape)
         out = th.stack((
             self.res0(out0),
             self.res1(out1),
