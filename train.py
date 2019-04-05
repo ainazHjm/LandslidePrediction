@@ -29,33 +29,43 @@ def validate(model, valset):
     (_, h, w) = valset.shape
     criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([500]).cuda())
     running_loss = 0
+    cnt = 0
     for i in range(h//hs):
         for j in range(w//ws):
             label = valset[-1, i*hs:(i+1)*hs, j*ws:(j+1)*ws].cuda()
             input_data = valset[:-1, i*hs:(i+1)*hs, j*ws:(j+1)*ws].unsqueeze(0).cuda()
-            predictions = model.forward(input_data).squeeze(0).squeeze(0)
-            # indices = input_data[0, 0, :, :] != -100
-            indices = 1 - th.isnan(input_data[0, 0, :, :])
-            if len(predictions[indices]) == 0:
-                continue
-            loss = criterion(
-                predictions[indices],
-                label[indices]
-            )
-            running_loss += loss.item()
-    return running_loss/((h//hs) * (w//ws))
+            # indices = 1 - th.isnan(input_data[0, 0, :, :])
+            if th.sum(1 - th.isnan(input_data[0, 0, :, :])) > 0:
+                predictions = model.forward(input_data).squeeze(0).squeeze(0)
+                indices = predictions != th.tensor(float('-inf')).cuda()
+                if len(indices) == 0:
+                    continue
+                loss = criterion(
+                    predictions[indices],
+                    label[indices]
+                )
+                running_loss += loss.item()
+                cnt = cnt + 1
+    return running_loss/cnt
 
 def sanity_check(model, train_data, train_label, valset, criterion):
     v_loss = validate(model, valset)
     t_loss = 0
+    cnt = 0
     for i in range(train_data.shape[0]):
         in_data = train_data[i, :, :, :].cuda()
-        label = train_label[i, :, :, :].cuda()
-        indices = 1 - th.isnan(in_data)
-        predictions = model.forward(in_data)
-        t_loss += criterion(predictions[indices], label[indices]).item()
-    t_loss = t_loss / train_data.shape[0]
-    print("running loss for before training >> val: %f train: %f" %(v_loss, t_loss))
+        label = train_label[i, :, :, :].squeeze(0).cuda()
+        # indices = 1 - th.isnan(in_data[0, :, :])
+        if th.sum(1 - th.isnan(in_data[0, :, :])) > 0:
+            # print(in_data.shape)
+            predictions = model.forward(in_data.unsqueeze(0)).squeeze(0).squeeze(0)
+            indices = predictions != th.tensor(float('-inf')).cuda()
+            if len(indices) == 0:
+                continue
+            t_loss += criterion(predictions[indices], label[indices]).item()
+            cnt = cnt + 1
+    t_loss = t_loss / cnt
+    print("running loss before training >> val: %f train: %f" %(v_loss, t_loss))
 
 def train(args, val_data, train_data_path="../image_data/data/Veneto/train_data.pt"):
     '''
@@ -75,40 +85,41 @@ def train(args, val_data, train_data_path="../image_data/data/Veneto/train_data.
     bs = args.batch_size
     num_iters = train_data.shape[0]//bs
     sanity_check(train_model, train_data, train_label, val_data, criterion)
-
+    th.cuda.empty_cache()
+    
     for i in range(args.n_epochs):
         running_loss = 0
+        cnt = 0
         for j in range(num_iters):
             optimizer.zero_grad()
             input_data = train_data[j*bs:(j+1)*bs, :, :, :].cuda()
             label = train_label[j*bs:(j+1)*bs, :, :, :].cuda()
-            predictions = train_model.forward(input_data)
-            # indices = (input_data[:, 0, :, :] != -100).unsqueeze(1)
-            indices = 1 - th.isnan(input_data[:, 0, :, :])
-            indices = indices.unsqueeze(1)
-            # import ipdb ; ipdb.set_trace()
-            if len(predictions[indices]) == 0:
-                continue
-            
-            loss = criterion(
-                predictions[indices],
-                label[indices]
-                )
-            # import ipdb ; ipdb.set_trace()
-            print(">> loss: %f" % loss.item())
-            running_loss += loss.item()
-            loss.backward()
-            optimizer.step()
+            # indices = 1 - th.isnan(input_data[:, 0, :, :])
+            if th.sum(1 - th.isnan(input_data[:, 0, :, :])) > 0:
+                # indices = indices.unsqueeze(1)
+                predictions = train_model.forward(input_data)
+                indices = predictions != th.tensor(float('-inf')).cuda()
+                if len(indices) == 0:
+                    continue
+                loss = criterion(
+                    predictions[indices],
+                    label[indices]
+                    )
+                print("%d >> loss: %f" % (cnt, loss.item()))
+                running_loss += loss.item()
+                cnt = cnt + 1
+                loss.backward()
+                optimizer.step()
         
         v_loss = validate(train_model, val_data)
         scheduler.step(v_loss)
         print("--- validation loss: %f" % v_loss)
-        writer.add_scalar("train loss", running_loss/(num_iters*bs), i)
+        writer.add_scalar("train loss", running_loss/cnt*bs, i)
         writer.add_scalar("validation loss", v_loss, i)
         
     th.save(train_model, "../models/CNN/"+ctime().replace("  "," ").replace(" ", "_").replace(":","_")+".pt")
     print("model has been trained and saved.")
-    return running_loss/(num_iters*bs)
+    return running_loss
 
 def cross_validate(args, data):
     '''
