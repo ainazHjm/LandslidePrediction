@@ -34,12 +34,15 @@ class FCNBasicBlock(nn.Module):
         x = x.view(-1, c)
         # print((x == th.tensor(float("-inf")).cuda()).nonzero())
         
-        indices = th.isnan(x) + (x == th.tensor(float("-inf")).cuda()) + (x == th.tensor(float("inf")).cuda())
+        indices = th.isnan(x) + (x == th.tensor(float("-inf")).cuda()) #+ (x == th.tensor(float("inf")).cuda())
         indices = 1 - indices
         indices = (th.sum(indices, 1) == c).nonzero().view(-1)
         # indices = th.tensor(list(set(range(x.shape[0])) - set(ignore))).cuda() if len(ignore)!=0 else th.tensor(list(range(x.shape[0]))).cuda()
         # indices = th.tensor([e for e in range(x.shape[0]) if e not in ignore]).cuda()
-        input_data = th.index_select(x, 0, indices)
+        if len(indices) == 0:
+            input_data = x
+        else:
+            input_data = th.index_select(x, 0, indices)
         mean = th.mean(input_data, 0) # this is a vector of size c
         var = th.var(input_data, 0) # this is also a vector of size c
         # import ipdb; ipdb.set_trace()
@@ -157,6 +160,11 @@ class FCNwPool(nn.Module):
         out1 = self.net[1](out0)
         out2 = self.net[2:4](out1)
         out3 = self.net[4:6](out2)
+        #print("printing all 4 resolutions:")
+        #print(out0)
+        #print(out1)
+        #print(out2)
+        #print(out3)
         # print(out0.shape, out1.shape, out2.shape, out3.shape)
         # print(self.res0(out0).shape)
         # print(self.res1(out1).shape)

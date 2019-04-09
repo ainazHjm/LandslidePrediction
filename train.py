@@ -30,15 +30,25 @@ def validate(model, valset):
     criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([500]).cuda())
     running_loss = 0
     cnt = 0
+    # print(h//hs, w//ws)
     for i in range(h//hs):
         for j in range(w//ws):
             label = valset[-1, i*hs:(i+1)*hs, j*ws:(j+1)*ws].cuda()
             input_data = valset[:-1, i*hs:(i+1)*hs, j*ws:(j+1)*ws].unsqueeze(0).cuda()
+            # print(input_data)
             # indices = 1 - th.isnan(input_data[0, 0, :, :])
             if th.sum(1 - th.isnan(input_data[0, 0, :, :])) > 0:
+                # print(i, j)
+                # print("number of not nan, number of all points >> %d, %d" % (th.sum(1 - th.isnan(input_data[0, 0, :, :])), 999*999))
                 predictions = model.forward(input_data).squeeze(0).squeeze(0)
-                indices = predictions != th.tensor(float('-inf')).cuda()
-                if len(indices) == 0:
+                indices = (predictions == th.tensor(float('-inf')).cuda()) + th.isnan(predictions)
+                indices = 1 - indices
+                # print(predictions)
+                # print(indices)
+                if th.sum(indices) == 0:
+                    # print(">>>> ignore batch in validate")
+                    # print(input_data, predictions)
+                    # print("all predictions nan ...")
                     continue
                 loss = criterion(
                     predictions[indices],
@@ -59,8 +69,9 @@ def sanity_check(model, train_data, train_label, valset, criterion):
         if th.sum(1 - th.isnan(in_data[0, :, :])) > 0:
             # print(in_data.shape)
             predictions = model.forward(in_data.unsqueeze(0)).squeeze(0).squeeze(0)
-            indices = predictions != th.tensor(float('-inf')).cuda()
-            if len(indices) == 0:
+            indices = (predictions == th.tensor(float('-inf')).cuda()) + th.isnan(predictions)
+            indices = 1 - indices
+            if th.sum(indices) == 0:
                 continue
             t_loss += criterion(predictions[indices], label[indices]).item()
             cnt = cnt + 1
@@ -98,8 +109,9 @@ def train(args, val_data, train_data_path="../image_data/data/Veneto/train_data.
             if th.sum(1 - th.isnan(input_data[:, 0, :, :])) > 0:
                 # indices = indices.unsqueeze(1)
                 predictions = train_model.forward(input_data)
-                indices = predictions != th.tensor(float('-inf')).cuda()
-                if len(indices) == 0:
+                indices = (predictions == th.tensor(float('-inf')).cuda()) + th.isnan(predictions)
+                indices = 1 - indices
+                if th.sum(indices) == 0:
                     continue
                 loss = criterion(
                     predictions[indices],
