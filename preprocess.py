@@ -13,4 +13,8 @@ def get_args():
 
 def preprocess():
     args = get_args()
+    ws = args.patch_wsize
+    fn = args.feature_names
+    gtn = args.ground_truth_name
+    
     
