@@ -32,22 +32,24 @@ class FCNBasicBlock(nn.Module):
         # print(x.shape)
         (n, c, h, w) = x.shape
         x = x.view(-1, c)
+        # indices = x!=0
         # print((x == th.tensor(float("-inf")).cuda()).nonzero())
         
-        indices = th.isnan(x) + (x == th.tensor(float("-inf")).cuda()) #+ (x == th.tensor(float("inf")).cuda())
-        indices = 1 - indices
-        indices = (th.sum(indices, 1) == c).nonzero().view(-1)
-        # indices = th.tensor(list(set(range(x.shape[0])) - set(ignore))).cuda() if len(ignore)!=0 else th.tensor(list(range(x.shape[0]))).cuda()
-        # indices = th.tensor([e for e in range(x.shape[0]) if e not in ignore]).cuda()
-        if len(indices) == 0:
-            input_data = x
-        else:
-            input_data = th.index_select(x, 0, indices)
-        mean = th.mean(input_data, 0) # this is a vector of size c
-        var = th.var(input_data, 0) # this is also a vector of size c
+        # indices = th.isnan(x) + (x == th.tensor(float("-inf")).cuda()) #+ (x == th.tensor(float("inf")).cuda())
+        # indices = 1 - indices
+        # indices = (th.sum(indices, 1) == c).nonzero().view(-1)
+        
+        # if len(indices) == 0:
+        #     input_data = x
+        # else:
+        #     input_data = th.index_select(x, 0, indices)
+        # mean = th.mean(input_data, 0) # this is a vector of size c
+        # var = th.var(input_data, 0) # this is also a vector of size c
+        mean = th.mean(x, 0)
+        var = th.var(x, 0)
         # import ipdb; ipdb.set_trace()
-        normalized_data = th.div(th.sub(x, mean), th.sqrt(var+eps))
-        output = projection(normalized_data) # this has the same shape as the input (-1 x c)
+        x = th.div(th.sub(x, mean), th.sqrt(var+eps))
+        output = projection(x) # this has the same shape as the input (-1 x c)
         return output.view(n, c, h, w) # output should have the same size as input (n, c, h, w)
 
     def forward(self, x):
