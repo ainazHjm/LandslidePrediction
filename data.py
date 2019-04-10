@@ -22,12 +22,12 @@ def divide(data):
     """
     div = data.shape[2]//5
     val_idx = np.array(1)
-    np.save("../image_data/data/CNN/val_idx.npy", val_idx)
+    np.save("../data/Veneto/val_idx.npy", val_idx)
     
     val_data = data[:, :, val_idx*div:(val_idx+1)*div]
     train_data = th.cat((data[:, :, 0:val_idx*div], data[:, :, (val_idx+1)*div:]), 2)
-    th.save(val_data, "../image_data/data/CNN/val_data.pt")
-    th.save(train_data, "../image_data/data/CNN/train_data.pt")
+    th.save(val_data, "../data/Veneto/val_data.pt")
+    th.save(train_data, "../data/Veneto/train_data.pt")
     return val_idx, val_data, train_data
 
 def zero_one(image):
@@ -61,8 +61,8 @@ def process(dir_path='../image_data/n_image_data/veneto/'):
 
 def normalize(train_data, val_data):
     (c, _, _) = train_data[:-1, :, :].shape # >>>> we shouldn't normalize the labels
-    indices = train_data[0, :, :] != -100
-    v_indices = val_data[0, :, :] != -100
+    indices = train_data[0, :, :] != 0
+    v_indices = val_data[0, :, :] != 0
     print(indices.shape)
     for i in range(c):
         td = train_data[i, :, :]
