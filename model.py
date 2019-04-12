@@ -35,26 +35,35 @@ class FCNBasicBlock(nn.Module):
         # indices = x!=0
         # print((x == th.tensor(float("-inf")).cuda()).nonzero())
         
-        # indices = th.isnan(x) + (x == th.tensor(float("-inf")).cuda()) #+ (x == th.tensor(float("inf")).cuda())
-        # indices = 1 - indices
-        # indices = (th.sum(indices, 1) == c).nonzero().view(-1)
+        indices = th.isnan(x) + (x == th.tensor(float("-inf")).cuda()) #+ (x == th.tensor(float("inf")).cuda())
+        indices = 1 - indices
+        indices = (th.sum(indices, 1) == c).nonzero().view(-1)
         
-        # if len(indices) == 0:
-        #     input_data = x
-        # else:
-        #     input_data = th.index_select(x, 0, indices)
-        # mean = th.mean(input_data, 0) # this is a vector of size c
-        # var = th.var(input_data, 0) # this is also a vector of size c
-        mean = th.mean(x, 0)
-        var = th.var(x, 0)
-        # import ipdb; ipdb.set_trace()
-        x = th.div(th.sub(x, mean), th.sqrt(var+eps))
-        output = projection(x) # this has the same shape as the input (-1 x c)
-        return output.view(n, c, h, w) # output should have the same size as input (n, c, h, w)
+        if len(indices) == 0:
+            return x.view(n, c, h, w)
+        else:
+            input_data = th.index_select(x, 0, indices)
+            mean = th.mean(input_data, 0) # this is a vector of size c
+            var = th.var(input_data, 0) # this is also a vector of size c
+            # print(mean, var)
+            # mean = th.mean(x, 0)
+            # var = th.var(x, 0)
+            # import ipdb; ipdb.set_trace()
+            x = th.div(th.sub(x, mean), th.sqrt(var+eps))
+            output = projection(x) # this has the same shape as the input (-1 x c)
+            return output.view(n, c, h, w) # output should have the same size as input (n, c, h, w)
 
     def forward(self, x):
-        data = F.relu(self.batchNormNet(self.conv1(x), self.projection1))
-        return F.relu(self.batchNormNet(self.conv2(data), self.projection2))
+        # print("in basic block:")
+        print("inf after first conv >> %d" % th.sum(self.conv1(x)[0, 0, :, :]==th.tensor(float('-inf')).cuda()))
+        # print("inf after batchnorm >> %d" %th.sum(self.batchNormNet(self.conv1(x), self.projection1)[0, 0, :, :]==th.tensor(float('-inf')).cuda()))
+        print("nan after first conv >> %d" % th.sum(th.isnan(self.conv1(x)[0, 0, :, :])))
+        # print("nan after batchnorm >> %d" %th.sum(th.isnan(self.batchNormNet(self.conv1(x), self.projection1)[0, 0, :, :])))
+        # data = F.relu(self.batchNormNet(self.conv1(x), self.projection1))
+        data = F.relu(self.conv1(x))
+        print("after relu >> %d" %th.sum(data[0, 0, :, :]==th.tensor(float('-inf')).cuda()))
+        # return F.relu(self.batchNormNet(self.conv2(data), self.projection2))
+        return F.relu(self.conv2(data))
 
 class FCNwPool(nn.Module):
     '''
@@ -122,8 +131,8 @@ class FCNwPool(nn.Module):
     def create_mask(self, padding):
         kernel = th.zeros(5, 1, 2*padding+1, 2*padding+1)
         kernel[0, 0, 0, padding] = 1
-        kernel[1, 0, padding, 0] = 1
-        kernel[2, 0, padding, -1] = 1
+        kernel[1, 0, padding//2, padding] = 1
+        kernel[2, 0, padding//2 + padding, padding] = 1
         kernel[3, 0, -1, padding] = 1
         kernel[-1, 0, padding, padding] = 1
         #print("kernel shape:")
@@ -137,7 +146,7 @@ class FCNwPool(nn.Module):
 
         n_features[:, 0:5, :, :] = F.conv2d(
             features[:, 0, :, :].view(-1, 1, h, w),
-            self.create_mask(10//pixel_res) + 1),
+            self.create_mask(10//pixel_res + 1),
             padding=10//pixel_res + 1,
             )
         n_features[:, 5:10, :, :] = F.conv2d(
@@ -162,11 +171,12 @@ class FCNwPool(nn.Module):
         out1 = self.net[1](out0)
         out2 = self.net[2:4](out1)
         out3 = self.net[4:6](out2)
-        #print("printing all 4 resolutions:")
-        #print(out0)
-        #print(out1)
-        #print(out2)
-        #print(out3)
+        # print("input nan values:")
+        # print("printing all 4 resolutions nan values:")
+        # print(th.sum(th.isnan(out0[0, 0, :, :]))+th.sum(out0[0, 0, :, :]==th.tensor(float('-inf')).cuda()))
+        # print(th.sum(th.isnan(out1[0, 0, :, :]))+th.sum(out1[0, 0, :, :]==th.tensor(float('-inf')).cuda()))
+        # print(th.sum(th.isnan(out2[0, 0, :, :]))+th.sum(out2[0, 0, :, :]==th.tensor(float('-inf')).cuda()))
+        # print(th.sum(th.isnan(out3[0, 0, :, :]))+th.sum(out3[0, 0, :, :]==th.tensor(float('-inf')).cuda()))
         # print(out0.shape, out1.shape, out2.shape, out3.shape)
         # print(self.res0(out0).shape)
         # print(self.res1(out1).shape)
