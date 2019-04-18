@@ -21,49 +21,48 @@ TODO: implement resnet
 '''
 
 class FCNBasicBlock(nn.Module):
-    def __init__(self, in_channel, mid_channel, out_channel):
+    '''
+    This class consists of convolutions but doesn't change the size.
+    '''
+    def __init__(self, in_channel, out_channel):
         super(FCNBasicBlock, self).__init__()
-        self.conv1 = nn.Conv2d(in_channel, mid_channel, kernel_size=(3,3), stride=(1,1))
-        self.conv2 = nn.Conv2d(mid_channel, out_channel, kernel_size=(3,3), stride=(1,1))
-        self.projection1 = nn.Linear(mid_channel, mid_channel)
-        self.projection2 = nn.Linear(out_channel, out_channel)
-
-    def batchNormNet(self, x, projection, eps=1e-5):
-        # print(x.shape)
-        (n, c, h, w) = x.shape
-        x = x.view(-1, c)
-        # indices = x!=0
-        # print((x == th.tensor(float("-inf")).cuda()).nonzero())
-        
-        indices = th.isnan(x) + (x == th.tensor(float("-inf")).cuda()) #+ (x == th.tensor(float("inf")).cuda())
-        indices = 1 - indices
-        indices = (th.sum(indices, 1) == c).nonzero().view(-1)
-        
-        if len(indices) == 0:
-            return x.view(n, c, h, w)
-        else:
-            input_data = th.index_select(x, 0, indices)
-            mean = th.mean(input_data, 0) # this is a vector of size c
-            var = th.var(input_data, 0) # this is also a vector of size c
-            # print(mean, var)
-            # mean = th.mean(x, 0)
-            # var = th.var(x, 0)
-            # import ipdb; ipdb.set_trace()
-            x = th.div(th.sub(x, mean), th.sqrt(var+eps))
-            output = projection(x) # this has the same shape as the input (-1 x c)
-            return output.view(n, c, h, w) # output should have the same size as input (n, c, h, w)
+        self.net = nn.Sequential(
+            nn.Conv2d(in_channel, out_channel, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
+            nn.BatchNorm2d(out_channel),
+            nn.ReLU(),
+            nn.Conv2d(out_channel, out_channel, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
+            nn.BatchNorm2d(out_channel),
+            nn.ReLU(),
+        )
 
     def forward(self, x):
-        # print("in basic block:")
-        print("inf after first conv >> %d" % th.sum(self.conv1(x)[0, 0, :, :]==th.tensor(float('-inf')).cuda()))
-        # print("inf after batchnorm >> %d" %th.sum(self.batchNormNet(self.conv1(x), self.projection1)[0, 0, :, :]==th.tensor(float('-inf')).cuda()))
-        print("nan after first conv >> %d" % th.sum(th.isnan(self.conv1(x)[0, 0, :, :])))
-        # print("nan after batchnorm >> %d" %th.sum(th.isnan(self.batchNormNet(self.conv1(x), self.projection1)[0, 0, :, :])))
-        # data = F.relu(self.batchNormNet(self.conv1(x), self.projection1))
-        data = F.relu(self.conv1(x))
-        print("after relu >> %d" %th.sum(data[0, 0, :, :]==th.tensor(float('-inf')).cuda()))
-        # return F.relu(self.batchNormNet(self.conv2(data), self.projection2))
-        return F.relu(self.conv2(data))
+        return self.net(x)
+
+class FCNDownSample(nn.Module):
+    def __init__(self, in_channel, out_channel):
+        super(FCNDownSample, self).__init__()
+        self.net = nn.Sequential(
+            nn.MaxPool2d(kernel_size=(4,4), stride=(4,4)),
+            FCNBasicBlock(in_channel, out_channel),
+            FCNBasicBlock(out_channel, out_channel),
+        )
+    def forward(self, x):
+        return self.net(x)
+
+class FCNUpSample(nn.Module):
+    def __init__(self, in_channel, out_channel):
+        super(FCNUpSample, self).__init__()
+        # self.k = (hout - hin*4) + 1
+        self.net = nn.Sequential(
+            nn.ConvTranspose2d(in_channel, out_channel, kernel_size=(5,5), stride=(1,1), padding=(2,2)),
+            nn.ConvTranspose2d(out_channel, out_channel, kernel_size=(4,4), stride=(4,4)),
+        ) 
+        # self.net = nn.Sequential(
+        #     *[self.block for _ in range(n-1)],
+        #     nn.ConvTranspose2d(out_channel, out_channel, kernel_size=(5,5), stride=(1,1)),
+        # )
+    def forward(self, x):
+        return self.net(x)
 
 class FCNwPool(nn.Module):
     '''
@@ -73,59 +72,37 @@ class FCNwPool(nn.Module):
         - 320m ~ 400m
         - 1280m ~ 1600m
     The output is the sum of all these resolutions.
-
-    TODO: try the weighted network as well. instead of using the adaptive avg pooling,
-    learn the weights of each output feature map. size = 3499x1999
     '''
-    def __init__(self, shape, pixel_res=20):
+    def __init__(self, shape, pixel_res):
         super(FCNwPool, self).__init__()
         self.shape = shape # CxHxW
         self.pixel_res = pixel_res
-        self.net = nn.Sequential(
-            FCNBasicBlock(shape[0], 8, 16,),
-            nn.MaxPool2d(kernel_size=(4,4), stride=(4,4)),
-            FCNBasicBlock(16, 32, 64),
-            nn.MaxPool2d(kernel_size=(4,4), stride=(4,4)),
-            FCNBasicBlock(64, 128, 256),
-            nn.MaxPool2d(kernel_size=(4,4), stride=(4,4)),
+
+        self.d1 = nn.Sequential(
+            FCNBasicBlock(shape[0], 64),
+            FCNBasicBlock(64, 128),
         )
-        self.res0 = nn.Sequential(
-            nn.ConvTranspose2d(16, 4, kernel_size=(4,4), stride=(1,1)),
-            nn.ConvTranspose2d(4, 1, kernel_size=(2,2), stride=(1,1)),
+        self.d2 = FCNDownSample(128, 256)
+        self.d3 = FCNDownSample(256, 512)
+        self.d4 = FCNDownSample(512, 1024)
+
+        self.u1 = nn.Sequential(
+            FCNUpSample(1024, 512),
+            FCNUpSample(512, 256),
+            FCNUpSample(256, 128),
+            nn.ConvTranspose2d(128, 1, kernel_size=(5,5), stride=(1,1), padding=(2,2)),
         )
-        self.res1 = nn.Sequential(
-            nn.ConvTranspose2d(16, 8, kernel_size=(2,2), stride=(2,2)),
-            nn.ConvTranspose2d(8, 4, kernel_size=(2,2), stride=(2,2)),
-            nn.ConvTranspose2d(4, 2, kernel_size=(4,4), stride=(1,1)),
-            nn.ConvTranspose2d(2, 1, kernel_size=(4,4), stride=(1,1)),
-            nn.ConvTranspose2d(1, 1, kernel_size=(2,2), stride=(1,1)),
+        self.u2 = nn.Sequential(
+            FCNUpSample(512, 256),
+            FCNUpSample(256, 128),
+            nn.ConvTranspose2d(128, 1, kernel_size=(5,5), stride=(1,1), padding=(2,2)),
         )
-        self.res2 = nn.Sequential(
-            *[
-                nn.ConvTranspose2d(2**(6-i), 2**(5-i), kernel_size=(2,2), stride=(2,2)) 
-                    for i in range(4)
-            ],
-            *[
-                nn.ConvTranspose2d(2**(2-i), 2**(1-i), kernel_size=(4,4), stride=(1,1)) if 2-i > 0
-                else nn.ConvTranspose2d(1, 1, kernel_size=(4,4), stride=(1,1))
-                    for i in range(7)
-            ],
-            nn.ConvTranspose2d(1, 1, kernel_size=(3,3), stride=(1,1)),
+        self.u3 = nn.Sequential(
+            FCNUpSample(256, 128),
+            nn.ConvTranspose2d(128, 1, kernel_size=(5,5), stride=(1,1), padding=(2,2)),
         )
-        self.res3 = nn.Sequential(
-            *[
-                nn.ConvTranspose2d(2**(8-i), 2**(7-i), kernel_size=(2,2), stride=(2,2))
-                for i in range(6)
-            ],
-            *[
-                nn.ConvTranspose2d(2**(2-i), 2**(1-i), kernel_size=(4,4), stride=(1,1)) if 2-i > 0
-                else nn.ConvTranspose2d(1, 1, kernel_size=(4,4), stride=(1,1))
-                    for i in range(34)
-            ],
-            nn.ConvTranspose2d(1, 1, kernel_size=(2,2), stride=(1,1)),
-        )
-        # self.avgpool = nn.AdaptiveAvgPool2d((self.shape[1], self.shape[2]))
-        # self.last = nn.Conv2d(3, 1, kernel_size=(1,1), stride=(1,1))
+        self.u4 = nn.ConvTranspose2d(128, 1, kernel_size=(5,5), stride=(1,1), padding=(2,2))
+
         self.last = nn.Conv2d(20, 1, kernel_size=(1,1), stride=(1,1))
 
     def create_mask(self, padding):
@@ -141,53 +118,57 @@ class FCNwPool(nn.Module):
 
     def get_neighbors(self, features, pixel_res):
         # print(features.shape)
-        (b, c, h, w) = features.shape # c should be 4 because we have three different resolutions
+        (b, c, h, w) = features.shape # c should be 4 because we have four different resolutions
         n_features = th.zeros(b, c*5, h, w).cuda()
 
         n_features[:, 0:5, :, :] = F.conv2d(
             features[:, 0, :, :].view(-1, 1, h, w),
-            self.create_mask(10//pixel_res + 1),
-            padding=10//pixel_res + 1,
-            )
-        n_features[:, 5:10, :, :] = F.conv2d(
-            features[:, 1, :, :].view(-1, 1, h, w),
-            self.create_mask(40//pixel_res + 1),
-            padding=40//pixel_res + 1,
-            )
-        n_features[:, 10:15, :, :] = F.conv2d(
-            features[:, 2, :, :].view(-1, 1, h, w),
-            self.create_mask(160//pixel_res + 1),
-            padding=160//pixel_res + 1,
-            )
-        n_features[:, 15:20, :, :] = F.conv2d(
-            features[:, 3, :, :].view(-1, 1, h, w),
             self.create_mask(640//pixel_res + 1),
             padding=640//pixel_res + 1,
             )
+        n_features[:, 5:10, :, :] = F.conv2d(
+            features[:, 1, :, :].view(-1, 1, h, w),
+            self.create_mask(160//pixel_res + 1),
+            padding=160//pixel_res + 1,
+            )
+        n_features[:, 10:15, :, :] = F.conv2d(
+            features[:, 2, :, :].view(-1, 1, h, w),
+            self.create_mask(40//pixel_res + 1),
+            padding=40//pixel_res + 1,
+            )
+        n_features[:, 15:20, :, :] = F.conv2d(
+            features[:, 3, :, :].view(-1, 1, h, w),
+            self.create_mask(10//pixel_res + 1),
+            padding=10//pixel_res + 1,
+            )
         return n_features
 
+    def pad(self, x, xt):
+        (_, _, h, w) = x.shape
+        (_, _, ht, wt) = xt.shape
+        hdif = ht - h
+        wdif = wt - w
+        x = F.pad(x, (wdif//2, wdif-wdif//2, hdif//2, hdif-hdif//2))
+        # print(x.shape, xt.shape)
+        return x
+
     def forward(self, x):
-        out0 = self.net[0](x)
-        out1 = self.net[1](out0)
-        out2 = self.net[2:4](out1)
-        out3 = self.net[4:6](out2)
-        # print("input nan values:")
-        # print("printing all 4 resolutions nan values:")
-        # print(th.sum(th.isnan(out0[0, 0, :, :]))+th.sum(out0[0, 0, :, :]==th.tensor(float('-inf')).cuda()))
-        # print(th.sum(th.isnan(out1[0, 0, :, :]))+th.sum(out1[0, 0, :, :]==th.tensor(float('-inf')).cuda()))
-        # print(th.sum(th.isnan(out2[0, 0, :, :]))+th.sum(out2[0, 0, :, :]==th.tensor(float('-inf')).cuda()))
-        # print(th.sum(th.isnan(out3[0, 0, :, :]))+th.sum(out3[0, 0, :, :]==th.tensor(float('-inf')).cuda()))
-        # print(out0.shape, out1.shape, out2.shape, out3.shape)
-        # print(self.res0(out0).shape)
-        # print(self.res1(out1).shape)
-        # print(self.res2(out2).shape)
-        # print(self.res3(out3).shape)
-        out = th.stack((
-            self.res0(out0),
-            self.res1(out1),
-            self.res2(out2),
-            self.res3(out3),
-        )).view(-1, 4, self.shape[1], self.shape[2])
+        # print(x.shape)
+        o1 = self.d1(x)
+        o2 = self.d2(o1)
+        o3 = self.d3(o2)
+        o4 = self.d4(o3)
+        res1 = self.pad(self.u1(o4), x)
+        res2 = self.pad(self.u2(o3), x)
+        res3 = self.pad(self.u3(o2), x)
+        res4 = self.pad(self.u4(o1), x)
+        
+        # print(o1.shape, o2.shape, o3.shape, o4.shape)
+        # print(self.u1(o4).shape)
+        # print(self.u2(o3).shape)
+        # print(self.u3(o2).shape)
+        # print(self.u4(o1).shape)
+        out = th.stack((res1, res2, res3, res4)).view(-1, 4, self.shape[1], self.shape[2])
         #print("out shape:")
         #print(out.shape)
         fx = self.last(self.get_neighbors(out, self.pixel_res))
