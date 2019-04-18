@@ -4,6 +4,7 @@ from torchvision import models, transforms
 from PIL import Image
 import numpy as np
 import random
+from os import listdir
 
 # pylint: disable=E1101
 def padding(image):
@@ -74,3 +75,14 @@ def normalize(train_data, val_data):
         print("train>> before-> mean: %f, std: %f --- now-> mean: %f, std: %f" % (mean.item(), std.item(), th.mean(train_data[i, :, :][indices].view(-1)).item(), th.std(train_data[i, :, :][indices].view(-1)).item()))
         print("validation>> mean: %f, std: %f" % (th.mean(val_data[i, :, :][v_indices].view(-1)).item(), th.std(val_data[i, :, :][v_indices].view(-1)).item()))
     return train_data, val_data
+
+def divide_data(path="../image_data/data/Piemonte/"):
+    files = listdir(path)
+    l = len(files)
+    print(l)
+    vi = int(0.2*l)+1
+    vd = files[0:vi]
+    td = files[vi:]
+    np.save(path+'vdIdx.npy', np.asarray(vd))
+    np.save(path+'tdIdx.npy', np.asarray(td))
+    print('data is divided.')
