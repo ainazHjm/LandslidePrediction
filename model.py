@@ -170,7 +170,7 @@ class FCNwPool(nn.Module):
         # print(self.u4(o1).shape)
         out = th.stack((res1, res2, res3, res4)).view(-1, 4, self.shape[1], self.shape[2])
         #print("out shape:")
-        #print(out.shape)
+        # print(out.shape)
         fx = self.last(self.get_neighbors(out, self.pixel_res))
         # print(fx.shape)
         return fx
