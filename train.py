@@ -23,29 +23,38 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 #             label[i*wnum+j, :, :, :] = train_data[-1, i*window:(i+1)*window, j*window:(j+1)*window]
 #     return input_data, label
 
-def load_data(args, fname):
+def load_data(args, fname, feature_num=21):
     dp = args.data_path
+    data_dir = 'data_600/'
+    label_dir = 'gt_200/'
     data = []
     label = []
     for name in fname:
-        im = np.load(dp+name) # 3d shape
-        im = im.astype(np.uint8)
-        data.append(im[:-1, :, :])
-        label.append(im[-1, :, :].reshape(1, im.shape[1], im.shape[2]))
+        features = []
+        for i in range(feature_num):
+            features.append(np.load(dp+data_dir+str(i)+'_'+name)) # 2d shape
+        features = np.asarray(features)
+        data.append(features)
+        gt = np.load(dp+label_dir+name)
+        label.append(gt.reshape(1, gt.shape[0], gt.shape[1]))
     return np.asarray(data), np.asarray(label) #4d shape
 
 def validate(args, model, valIdx):
+    th.cuda.empty_cache()
     criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([1000]).cuda())
     # criterion = nn.BCEWithLogitsLoss()
     running_loss = 0
-    bs = args.batch_size
-    num_iters = valIdx.shape[0]//bs + 1
+    # bs = args.batch_size
+    bs = 1
+    num_iters = valIdx.shape[0]
     
     for i in range(num_iters):
-        in_d, gt = load_data(args, valIdx[i*bs:(i+1)*bs]) if i < num_iters else load_data(args, valIdx[i*bs:])
-        in_d, gt = th.tensor(in_d).float().cuda(), th.tensor(gt).float().cuda()
-        prds = model.forward(in_d)
-        loss = criterion(prds, gt)
+        # in_d, gt = load_data(args, valIdx[i*bs:(i+1)*bs]) if i < num_iters else load_data(args, valIdx[i*bs:])
+        in_d, gt = load_data(args, [valIdx[i]])
+        in_d, gt = th.tensor(in_d).cuda().detach(), th.tensor(gt).float().cuda().detach()
+        # print(in_d.shape, gt.shape, valIdx[i])
+        prds = model.forward(in_d).detach()
+        loss = criterion(prds[:, :, 200:400, 200:400].view(-1, 1, 200, 200), gt)
         running_loss += loss.item()
         
     return running_loss/num_iters
@@ -57,26 +66,29 @@ def train(args, train_data, val_data):
         1. try with patience = 1
         2. find the correponding features names
         3. train the model with higher penalty weight for postive samples (ratio1:1)
+        4. (*) train without batch normalization > not good
+        5. train the model without the penalty weight (ratio 0.02:100)
     '''
     writer = SummaryWriter()
     th.cuda.empty_cache()
     exe_time = ctime().replace("  "," ").replace(" ", "_").replace(":","_")
-    dir_name = args.save_model_to + exe_time
+    dir_name = args.save_model_to + exe_time if args.c else args.save_model_to
     if not os.path.exists(dir_name):
         os.mkdir(dir_name)
     # train_data, train_label = make_patches(train_data_path)
-    train_model = model.FCN().cuda() if args.model == "FCN" else model.FCNwPool((22-1, 200, 200), args.pix_res).cuda()
+    train_model = model.FCN().cuda() if args.model == "FCN" else model.FCNwPool((22-1, 600, 600), args.pix_res).cuda()
     if args.load_model:
         train_model.load_state_dict(th.load(args.load_model).state_dict())
     print("model is initialized ...")
 
     optimizer = to.Adam(train_model.parameters(), lr = args.lr, weight_decay = args.decay)
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=2)
+    # scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=2)
     criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([1000]).cuda())
     # criterion = nn.BCEWithLogitsLoss()
 
     bs = args.batch_size
     num_iters = train_data.shape[0]//bs
+    print(num_iters)
     running_loss = 0
     
     for i in range(args.n_epochs):
@@ -85,46 +97,51 @@ def train(args, train_data, val_data):
         np.random.shuffle(train_data)
         np.random.shuffle(val_data)
 
-        if (i+1) % args.s == 0:
-            th.save(train_model, dir_name+'/'+str(i)+'_'+exe_time+'.pt')
+        # if (i+1) % args.s == 0:
+        #    th.save(train_model, dir_name+'/'+str(i)+'_'+exe_time+'.pt')
 
-        for j in range(num_iters+1):
+        for j in range(num_iters):
             optimizer.zero_grad()
-            in_d, gt = load_data(args, train_data[j*bs:(j+1)*bs]) if j < num_iters else load_data(args, train_data[j*bs:])
+            in_d, gt = load_data(args, train_data[j*bs:(j+1)*bs])
             # print(in_d.shape, gt.shape)
-            in_d, gt = th.tensor(in_d).float().cuda(), th.tensor(gt).float().cuda()
+            in_d, gt = th.tensor(in_d).cuda(), th.tensor(gt).float().cuda()
+            # print(in_d.shape, gt.shape)
             prds = train_model.forward(in_d)
-
-            loss = criterion(prds, gt)
-            print("%d,%d >> loss: %f" % (i, j, loss.item()), end='\r')
-            # writer.add_scalar("iter tloss", loss.item(), i*num_iters+j)
+            # print(prds.shape)
+            loss = criterion(prds[:, :, 200:400, 200:400].view(-1, 1, 200, 200), gt)
+            if (i*num_iters+j) % 20 == 0:
+                writer.add_scalar("loss/train@100", loss.item(), i*num_iters+j)
+                print("%d,%d >> loss: %f" % (i, j, loss.item()))
             running_loss += loss.item()
             loss.backward()
             optimizer.step()
 
-            if (i*num_iters+j+1) % 100 == 0:
+            if (i*num_iters+j+1) % 500 == 0:
                 v_loss = validate(args, train_model, val_data)
-                scheduler.step(v_loss)
+                # scheduler.step(v_loss)
                 print("--- validation loss: %f" % v_loss)
-                writer.add_scalars("loss/grouped", {'validation': v_loss, 'train': running_loss/100}, i*num_iters+j)
+                writer.add_scalars("loss/grouped", {'validation': v_loss, 'train': running_loss/500}, i*num_iters+j)
                 writer.add_scalar("loss/validation", v_loss, i*num_iters+j)
-                writer.add_scalar("loss/train", running_loss/100, i*num_iters+j)
+                writer.add_scalar("loss/train", running_loss/500, i*num_iters+j)
                 running_loss = 0
 
                 for name, param in train_model.named_parameters():
                     writer.add_histogram(name, param.clone().cpu().data.numpy(), i*num_iters+j)
                 
-                tidx = np.random.choice(train_data.shape[0], 1, replace=False)
-                vidx = np.random.choice(val_data.shape[0], 1, replace=False)
-                t_img, t_gt = load_data(args, train_data[tidx])
-                v_img, v_gt = load_data(args, val_data[vidx])
-                t_prd = train_model.forward(th.tensor(t_img).float().view(1,-1,200,200).cuda())
-                v_prd = train_model.forward(th.tensor(v_img).float().view(1,-1,200,200).cuda())
-                writer.add_image('GroundTruth/train', t_gt[0,:,:], i*num_iters+j)
-                writer.add_image('GroundTruth/validation', v_gt[0,:,:], i*num_iters+j)
-                writer.add_image('Prediction/train', t_prd[0,0,:,:], i*num_iters+j)
-                writer.add_image('Prediction/validation', v_prd[0,0,:,:], i*num_iters+j)
-        
+                #tidx = np.random.choice(train_data.shape[0], 1, replace=False)
+                #vidx = np.random.choice(val_data.shape[0], 1, replace=False)
+                #print(tidx, vidx)
+                #t_img, t_gt = load_data(args, train_data[tidx])
+                #v_img, v_gt = load_data(args, val_data[vidx])
+                #t_prd = train_model.forward(th.tensor(t_img).cuda())
+                #v_prd = train_model.forward(th.tensor(v_img).cuda())
+                #writer.add_image('GroundTruth/train', gt[0,0,:,:], i*num_iters+j)
+                #writer.add_image('GroundTruth/validation', v_gt[0,0,:,:], i*num_iters+j)
+                #writer.add_image('Prediction/train', t_prd[0,0,200:400,200:400], i*num_iters+j)
+                #writer.add_image('Prediction/validation', v_prd[0,0,200:400,200:400], i*num_iters+j)
+        if (i+1) % args.s == 0:
+            th.save(train_model, dir_name+'/'+str(i)+'_'+exe_time+'.pt')
+    writer.export_scalars_to_json(dir_name+'/loss.json')    
     th.save(train_model, dir_name+'/final@'+str(i)+'_'+exe_time+'.pt')
     print("model has been trained and saved.")
 

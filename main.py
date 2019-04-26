@@ -21,6 +21,7 @@ def get_args():
     parser.add_argument("--save_model_to", type=str, default="../models/CNN/Piemonte/")
     parser.add_argument("--pix_res", type=int, default=10)
     parser.add_argument("--s", type=int, default=5) #save the model at how many epochs
+    parser.add_argument("--c", type=str2bool, default=False)
     parser.add_argument("--save_res_to", type=str, default='../output/CNN/Piemonte/')
     # parser.add_argument("--region", type=str, default='Piemonte')
     return parser.parse_args()
@@ -43,8 +44,8 @@ def main():
         print("validating the model on validation data ...")
         model = th.load(args.load_model)
         save_results(args, model, vd)
-        # print("validating the model on training data ...")
-        # save_results(args, model, td)
+        print("validating the model on training data ...")
+        save_results(args, model, td)
         print("model is validated and the results are saved.")      
     else:
         print("starting to train ...")
