@@ -40,24 +40,22 @@ def load_data(args, fname, feature_num=21):
     return np.asarray(data), np.asarray(label) #4d shape
 
 def validate(args, model, valIdx):
-    th.cuda.empty_cache()
-    criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([1000]).cuda())
-    # criterion = nn.BCEWithLogitsLoss()
-    running_loss = 0
-    # bs = args.batch_size
-    bs = 1
-    num_iters = valIdx.shape[0]
-    
-    for i in range(num_iters):
-        # in_d, gt = load_data(args, valIdx[i*bs:(i+1)*bs]) if i < num_iters else load_data(args, valIdx[i*bs:])
-        in_d, gt = load_data(args, [valIdx[i]])
-        in_d, gt = th.tensor(in_d).cuda().detach(), th.tensor(gt).float().cuda().detach()
-        # print(in_d.shape, gt.shape, valIdx[i])
-        prds = model.forward(in_d).detach()
-        loss = criterion(prds[:, :, 200:400, 200:400].view(-1, 1, 200, 200), gt)
-        running_loss += loss.item()
-        
-    return running_loss/num_iters
+    with th.no_grad():
+        criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([1000]).cuda())
+        # criterion = nn.BCEWithLogitsLoss()
+        running_loss = 0
+        bs = args.batch_size
+        #bs = 1
+        num_iters = valIdx.shape[0]//bs
+        for i in range(num_iters):
+            # in_d, gt = load_data(args, valIdx[i*bs:(i+1)*bs]) if i < num_iters else load_data(args, valIdx[i*bs:])
+            in_d, gt = load_data(args, valIdx[i*bs:(i+1)*bs])
+            in_d, gt = th.tensor(in_d).cuda(), th.tensor(gt).float().cuda()
+            # print(in_d.shape, gt.shape, valIdx[i])
+            prds = model.forward(in_d)
+            loss = criterion(prds[:, :, 200:400, 200:400].view(-1, 1, 200, 200), gt)
+            running_loss += loss.item()
+        return running_loss/num_iters
 
 def train(args, train_data, val_data):
     '''
@@ -70,7 +68,7 @@ def train(args, train_data, val_data):
         5. train the model without the penalty weight (ratio 0.02:100)
     '''
     writer = SummaryWriter()
-    th.cuda.empty_cache()
+    # th.cuda.empty_cache()
     exe_time = ctime().replace("  "," ").replace(" ", "_").replace(":","_")
     dir_name = args.save_model_to + exe_time if args.c else args.save_model_to
     if not os.path.exists(dir_name):
@@ -117,6 +115,7 @@ def train(args, train_data, val_data):
             optimizer.step()
 
             if (i*num_iters+j+1) % 500 == 0:
+                del in_d, gt, prds
                 v_loss = validate(args, train_model, val_data)
                 # scheduler.step(v_loss)
                 print("--- validation loss: %f" % v_loss)
