@@ -10,19 +10,6 @@ from torchvision.utils import save_image
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 # pylint: disable=E1101,E0401,E1123
 
-# def make_patches(train_data_path, window=999):
-#     train_data = th.load(train_data_path)
-#     (c, h, w) = train_data.shape
-#     hnum = h//window
-#     wnum = w//window
-#     input_data = th.zeros(hnum*wnum, c-1, window, window)
-#     label = th.zeros(hnum*wnum, 1, window, window)
-#     for i in range(hnum):
-#         for j in range(wnum):
-#             input_data[i*wnum+j, :, :, :] = train_data[:-1, i*window:(i+1)*window, j*window:(j+1)*window]
-#             label[i*wnum+j, :, :, :] = train_data[-1, i*window:(i+1)*window, j*window:(j+1)*window]
-#     return input_data, label
-
 def load_data(args, fname, feature_num=21):
     dp = args.data_path
     data_dir = 'data_600/'
@@ -107,21 +94,21 @@ def train(args, train_data, val_data):
             prds = train_model.forward(in_d)
             # print(prds.shape)
             loss = criterion(prds[:, :, 200:400, 200:400].view(-1, 1, 200, 200), gt)
-            if (i*num_iters+j) % 20 == 0:
-                writer.add_scalar("loss/train@100", loss.item(), i*num_iters+j)
+            if (i*num_iters+j+1) % 20 == 0:
+                writer.add_scalar("loss/train@20", loss.item(), i*num_iters+j)
                 print("%d,%d >> loss: %f" % (i, j, loss.item()))
             running_loss += loss.item()
             loss.backward()
             optimizer.step()
 
-            if (i*num_iters+j+1) % 500 == 0:
+            if (i*num_iters+j+1) % 1000 == 0:
                 del in_d, gt, prds
                 v_loss = validate(args, train_model, val_data)
                 # scheduler.step(v_loss)
                 print("--- validation loss: %f" % v_loss)
-                writer.add_scalars("loss/grouped", {'validation': v_loss, 'train': running_loss/500}, i*num_iters+j)
+                writer.add_scalars("loss/grouped", {'validation': v_loss, 'train': running_loss/1000}, i*num_iters+j)
                 writer.add_scalar("loss/validation", v_loss, i*num_iters+j)
-                writer.add_scalar("loss/train", running_loss/500, i*num_iters+j)
+                writer.add_scalar("loss/train", running_loss/1000, i*num_iters+j)
                 running_loss = 0
 
                 for name, param in train_model.named_parameters():
