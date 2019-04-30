@@ -31,13 +31,14 @@ def convert_nodata(np_img):
     return np_img
 
 def normalize(np_img, f = 'slope'):
-    nodata = np_img < 0
-    overlimit = np_img > 180
-    mean = np.mean(np_img[1-(nodata+overlimit)])
-    std = np.std(np_img[1-(nodata+overlimit)])
+    # nodata = np_img < 0
+    # overlimit = np_img > 180
+    if f == 'slope':
+        np_img[np_img < 0] = 0
+        np_img[np_img > 180] = 0
+    mean = np.mean(np_img)
+    std = np.std(np_img)
     np_img = (np_img - mean)/std
-    np_img[nodata] = 0
-    np_img[overlimit] = 0
     return np_img
 
 def zero_one(np_img):

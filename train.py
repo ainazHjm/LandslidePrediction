@@ -4,25 +4,36 @@ import torch as th
 import torch.optim as to
 import torch.nn as nn
 import os
+import imutils
 from time import ctime
 from tensorboardX import SummaryWriter
 from torchvision.utils import save_image
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 # pylint: disable=E1101,E0401,E1123
 
-def load_data(args, fname, feature_num=21):
+def load_data(args, fname, angle, feature_num=21):
     dp = args.data_path
-    data_dir = 'data_600/'
+    data_dir = 'data_'+str(args.pad*2)
     label_dir = 'gt_200/'
     data = []
     label = []
     for name in fname:
         features = []
         for i in range(feature_num):
-            features.append(np.load(dp+data_dir+str(i)+'_'+name)) # 2d shape
+            img = np.load(dp+data_dir+str(i)+'_'+name)
+            rotated = imutils.rotate_bound(img, angle)
+            padding = img.shape[0] + img.shape[0]//2 - rotated.shape[0]
+            if padding < 0:
+                raise ValueError
+            features.append(np.pad(rotated, padding, 'constant')) # 2d shape
         features = np.asarray(features)
         data.append(features)
         gt = np.load(dp+label_dir+name)
+        rotated_gt = imutils.rotate_bound(gt, angle)
+        padding = gt.shape[0] + gt.shape[0]//2 - rotated_gt.shape[0]
+        if padding < 0:
+            raise ValueError
+        gt = np.pad(rotated_gt, padding, 'constant')
         label.append(gt.reshape(1, gt.shape[0], gt.shape[1]))
     return np.asarray(data), np.asarray(label) #4d shape
 
@@ -36,11 +47,11 @@ def validate(args, model, valIdx):
         num_iters = valIdx.shape[0]//bs
         for i in range(num_iters):
             # in_d, gt = load_data(args, valIdx[i*bs:(i+1)*bs]) if i < num_iters else load_data(args, valIdx[i*bs:])
-            in_d, gt = load_data(args, valIdx[i*bs:(i+1)*bs])
+            in_d, gt = load_data(args, valIdx[i*bs:(i+1)*bs], 0)
             in_d, gt = th.tensor(in_d).cuda(), th.tensor(gt).float().cuda()
             # print(in_d.shape, gt.shape, valIdx[i])
             prds = model.forward(in_d)
-            loss = criterion(prds[:, :, 200:400, 200:400].view(-1, 1, 200, 200), gt)
+            loss = criterion(prds[:, :, args.pad:args.pad+200, args.pad:args.pad+200].view(-1, 1, 200, 200), gt)
             running_loss += loss.item()
         return running_loss/num_iters
 
@@ -61,7 +72,7 @@ def train(args, train_data, val_data):
     if not os.path.exists(dir_name):
         os.mkdir(dir_name)
     # train_data, train_label = make_patches(train_data_path)
-    train_model = model.FCN().cuda() if args.model == "FCN" else model.FCNwPool((22-1, 600, 600), args.pix_res).cuda()
+    train_model = model.FCN().cuda() if args.model == "FCN" else model.FCNwPool((22-1, 200+args.pad*2, 200+args.pad*2), args.pix_res).cuda()
     if args.load_model:
         train_model.load_state_dict(th.load(args.load_model).state_dict())
     print("model is initialized ...")
@@ -86,45 +97,45 @@ def train(args, train_data, val_data):
         #    th.save(train_model, dir_name+'/'+str(i)+'_'+exe_time+'.pt')
 
         for j in range(num_iters):
-            optimizer.zero_grad()
-            in_d, gt = load_data(args, train_data[j*bs:(j+1)*bs])
-            # print(in_d.shape, gt.shape)
-            in_d, gt = th.tensor(in_d).cuda(), th.tensor(gt).float().cuda()
-            # print(in_d.shape, gt.shape)
-            prds = train_model.forward(in_d)
-            # print(prds.shape)
-            loss = criterion(prds[:, :, 200:400, 200:400].view(-1, 1, 200, 200), gt)
-            if (i*num_iters+j+1) % 20 == 0:
-                writer.add_scalar("loss/train@20", loss.item(), i*num_iters+j)
-                print("%d,%d >> loss: %f" % (i, j, loss.item()))
-            running_loss += loss.item()
-            loss.backward()
-            optimizer.step()
+            for angle in np.arange(0, 360, 5):
+                optimizer.zero_grad()
+                in_d, gt = load_data(args, train_data[j*bs:(j+1)*bs], angle)
+                in_d, gt = th.tensor(in_d).cuda(), th.tensor(gt).float().cuda()
+                # print(in_d.shape, gt.shape)
+                prds = train_model.forward(in_d)
+                # print(prds.shape)
+                loss = criterion(prds[:, :, args.pad:args.pad+200, args.pad:args.pad+200].view(-1, 1, 200, 200), gt)
+                if (i*num_iters+j+1) % 20 == 0:
+                    writer.add_scalar("loss/train@20", loss.item(), i*num_iters+j)
+                    print("%d,%d >> loss: %f" % (i, j, loss.item()))
+                running_loss += loss.item()
+                loss.backward()
+                optimizer.step()
 
-            if (i*num_iters+j+1) % 1000 == 0:
-                del in_d, gt, prds
-                v_loss = validate(args, train_model, val_data)
-                # scheduler.step(v_loss)
-                print("--- validation loss: %f" % v_loss)
-                writer.add_scalars("loss/grouped", {'validation': v_loss, 'train': running_loss/1000}, i*num_iters+j)
-                writer.add_scalar("loss/validation", v_loss, i*num_iters+j)
-                writer.add_scalar("loss/train", running_loss/1000, i*num_iters+j)
-                running_loss = 0
+                if (i*num_iters+j+1) % 1000 == 0:
+                    del in_d, gt, prds
+                    v_loss = validate(args, train_model, val_data)
+                    # scheduler.step(v_loss)
+                    print("--- validation loss: %f" % v_loss)
+                    writer.add_scalars("loss/grouped", {'validation': v_loss, 'train': running_loss/1000}, i*num_iters+j)
+                    writer.add_scalar("loss/validation", v_loss, i*num_iters+j)
+                    writer.add_scalar("loss/train", running_loss/1000, i*num_iters+j)
+                    running_loss = 0
 
-                for name, param in train_model.named_parameters():
-                    writer.add_histogram(name, param.clone().cpu().data.numpy(), i*num_iters+j)
-                
-                #tidx = np.random.choice(train_data.shape[0], 1, replace=False)
-                #vidx = np.random.choice(val_data.shape[0], 1, replace=False)
-                #print(tidx, vidx)
-                #t_img, t_gt = load_data(args, train_data[tidx])
-                #v_img, v_gt = load_data(args, val_data[vidx])
-                #t_prd = train_model.forward(th.tensor(t_img).cuda())
-                #v_prd = train_model.forward(th.tensor(v_img).cuda())
-                #writer.add_image('GroundTruth/train', gt[0,0,:,:], i*num_iters+j)
-                #writer.add_image('GroundTruth/validation', v_gt[0,0,:,:], i*num_iters+j)
-                #writer.add_image('Prediction/train', t_prd[0,0,200:400,200:400], i*num_iters+j)
-                #writer.add_image('Prediction/validation', v_prd[0,0,200:400,200:400], i*num_iters+j)
+                    for name, param in train_model.named_parameters():
+                        writer.add_histogram(name, param.clone().cpu().data.numpy(), i*num_iters+j)
+
+                    #tidx = np.random.choice(train_data.shape[0], 1, replace=False)
+                    #vidx = np.random.choice(val_data.shape[0], 1, replace=False)
+                    #print(tidx, vidx)
+                    #t_img, t_gt = load_data(args, train_data[tidx])
+                    #v_img, v_gt = load_data(args, val_data[vidx])
+                    #t_prd = train_model.forward(th.tensor(t_img).cuda())
+                    #v_prd = train_model.forward(th.tensor(v_img).cuda())
+                    #writer.add_image('GroundTruth/train', gt[0,0,:,:], i*num_iters+j)
+                    #writer.add_image('GroundTruth/validation', v_gt[0,0,:,:], i*num_iters+j)
+                    #writer.add_image('Prediction/train', t_prd[0,0,200:400,200:400], i*num_iters+j)
+                    #writer.add_image('Prediction/validation', v_prd[0,0,200:400,200:400], i*num_iters+j)
         if (i+1) % args.s == 0:
             th.save(train_model, dir_name+'/'+str(i)+'_'+exe_time+'.pt')
     writer.export_scalars_to_json(dir_name+'/loss.json')    
