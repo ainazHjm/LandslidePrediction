@@ -13,25 +13,27 @@ from torchvision.utils import save_image
 # from train import load_data
 
 def data_loader(args, fname, feature_num=21):
+    max_shape = (464, 464)
     dp = args.data_path
-    data_dir = 'data_600/'
+    data_dir = 'data_'+str(args.pad*2)+'/'
     # label_dir = 'gt_200/'
     data = []
     names = []
     for name in fname:
         features = []
         for i in range(feature_num):
-           features.append(np.load(dp+data_dir+str(i)+'_'+name))
+           features.append(np.pad(np.load(dp+data_dir+str(i)+'_'+name), 68, 'constant'))
         features = np.asarray(features)
         data.append(features)
         names.append(name)
     return np.asarray(data), np.asarray(names) #4d shape
 
-def save_results(args, model, data_idx, pad=64):
+def save_results(args, model, idx):
     th.cuda.empty_cache()
     dir_name = args.save_res_to + args.load_model.split('/')[-1].split('.')[0]
     if not os.path.exists(dir_name):
         os.mkdir(dir_name)
+    data_idx = np.load(args.data_path+'tdIdx.npy') if idx=='train' else np.load(args.data_path+'vdIdx.npy')
     sig = Sigmoid()
     # bs = args.batch_size
     num_iters = (data_idx.shape[0])
@@ -43,7 +45,8 @@ def save_results(args, model, data_idx, pad=64):
         prds[ignore.unsqueeze(1)] = 0
         for j in range(prds.shape[0]):
             # save_image(prds[j, 0, :, :], dir_name+'/'+names[j].split('.')[0]+'.tif', range=(0,1))
-            np.save(dir_name+'/'+names[j], prds[j, 0, pad:pad+200, pad:pad+200].cpu().data.numpy())
+            np.save(dir_name+'/'+names[j], prds[j, 0, 132:132+200, 132:132+200].cpu().data.numpy())
+            # np.save(dir_name+'/'+names[j], prds[j, 0, args.pad:-args.pad, args.pad:-args.pad].cpu().data.numpy())
 
 def unite_imgs(data_path, orig_shape, ws):
     img_names = os.listdir(data_path)
