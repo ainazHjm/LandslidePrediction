@@ -22,6 +22,7 @@ def get_args():
     parser.add_argument("--pix_res", type=int, default=10)
     parser.add_argument("--s", type=int, default=5) #save the model at how many epochs
     parser.add_argument("--c", type=str2bool, default=False)
+    parser.add_argument("--pad", type=int, default=64)
     parser.add_argument("--save_res_to", type=str, default='../output/CNN/Piemonte/')
     # parser.add_argument("--region", type=str, default='Piemonte')
     return parser.parse_args()
