@@ -140,7 +140,7 @@ def train(args):
                 # loss = criterion(prds[:, :, hdif//2:hdif//2+200, wdif//2:wdif//2+200].view(-1, 1, 200, 200), gt)
                 loss = criterion(prds[:, :, args.pad:-args.pad, args.pad:-args.pad].view(-1, 1, data_max_shape[0]-args.pad*2, data_max_shape[1]-args.pad*2), gt)
                 writer.add_scalar("loss/train_iter", loss.item(), i*num_iters+j)
-                print("%d,%d >> loss: %f" % (i, j, loss.item()))
+                print("%d,%d,%d >> loss: %f" % (i, j, k, loss.item()))
                 running_loss += loss.item()
                 loss_100 += loss.item()
                 # loss_20 += loss.item
@@ -150,14 +150,14 @@ def train(args):
                 loss.backward()
                 optimizer.step()
 
-                if (i*num_iters*360/5+j*360/5+k+1) % 1000 == 0:
+                if (i*num_iters*360/5+j*360/5+k+1) % 50000 == 0:
                     del in_d, gt, prds
-                    v_loss = validate(args, train_model, max_shape)
+                    v_loss = validate(args, train_model, data_max_shape, gt_max_shape)
                     # scheduler.step(v_loss)
                     print("--- validation loss: %f" % v_loss)
-                    writer.add_scalars("loss/grouped", {'validation': v_loss, 'train': running_loss/1000}, i*num_iters*360/5+j*360/5+k+1)
+                    writer.add_scalars("loss/grouped", {'validation': v_loss, 'train': running_loss/50000}, i*num_iters*360/5+j*360/5+k+1)
                     writer.add_scalar("loss/validation", v_loss, i*num_iters*360/5+j*360/5+k+1)
-                    writer.add_scalar("loss/train", running_loss/1000, i*num_iters*360/5+j*360/5+k+1)
+                    writer.add_scalar("loss/train", running_loss/50000, i*num_iters*360/5+j*360/5+k+1)
                     running_loss = 0
 
                     for name, param in train_model.named_parameters():
