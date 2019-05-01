@@ -10,7 +10,6 @@ def get_args():
     parser = argparse.ArgumentParser(description="Training a CNN-Classifier for landslide prediction")
     # parser.add_argument("--cross_validation", type=str2bool, default=False)
     parser.add_argument("--model", type=str, default="FCN")
-    # parser.add_argument("--debug", type=str2bool, default=False)
     parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("--n_epochs", type=int, default=20)
     parser.add_argument("--batch_size", type=int, default=10)
@@ -24,33 +23,21 @@ def get_args():
     parser.add_argument("--c", type=str2bool, default=False)
     parser.add_argument("--pad", type=int, default=64)
     parser.add_argument("--save_res_to", type=str, default='../output/CNN/Piemonte/')
-    # parser.add_argument("--region", type=str, default='Piemonte')
     return parser.parse_args()
 
 def main():
     args = get_args()
-    # if args.cross_validation:
-    #     data = process()
-    #     # train_data, val_data, val_idx = cross_validate(args, data)
-    # else:
-    #     # the data that is loaded is standardized with mean 0 and std 1
-    #     val_data = th.load("../image_data/data/Veneto/nan/val_data.pt")
-    #     val_idx = np.load("../image_data/data/Veneto/val_idx.npy")
-    td = np.load(args.data_path+'tdIdx.npy')
-    vd = np.load(args.data_path+'vdIdx.npy')
-    print("data index is loaded ...")
-
     if args.validate:
-        print("loading a trained model...")
-        print("validating the model on validation data ...")
+        print("loading a trained model...", end='\r')
         model = th.load(args.load_model)
-        save_results(args, model, vd)
-        print("validating the model on training data ...")
-        save_results(args, model, td)
+        print("validating the model on validation data ...", end='\r')
+        save_results(args, model, 'validation')
+        print("validating the model on training data ...", end='\r')
+        save_results(args, model, 'train')
         print("model is validated and the results are saved.")      
     else:
         print("starting to train ...")
-        train.train(args, td, vd)
+        train.train(args)
 
 if __name__ == "__main__":
     main()
