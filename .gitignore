@@ -1,6 +1,9 @@
 runs/
+other_runs/
 .vscode/
 nohup.out
+*.jpg
+*.tif
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
