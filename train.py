@@ -67,7 +67,7 @@ def train(args):
     print("model is initialized ...")
 
     optimizer = to.Adam(train_model.parameters(), lr = args.lr, weight_decay = args.decay)
-    # scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=2)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=5)
     criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([1000]).cuda())
 
     bs = args.batch_size
@@ -97,18 +97,18 @@ def train(args):
                 print("%d,%d >> loss: %f" % (i, j, loss_100/100))
                 loss_100 = 0
 
-            if (i*num_iters+j+1) % 1000 == 0:
-                del in_d, gt, prds
-                v_loss = validate(args, train_model)
-                # scheduler.step(v_loss)
-                print("--- validation loss: %f" % v_loss)
-                writer.add_scalars("loss/grouped", {'validation': v_loss, 'train': running_loss/1000}, i*num_iters+j)
-                writer.add_scalar("loss/validation", v_loss, i*num_iters+j)
-                writer.add_scalar("loss/train", running_loss/1000, i*num_iters+j)
-                running_loss = 0
-                for name, param in train_model.named_parameters():
-                    writer.add_histogram(name, param.clone().cpu().data.numpy(), i*num_iters+j)
-                
+        # if (i*num_iters+j+1) % 1000 == 0:
+        del in_d, gt, prds
+        v_loss = validate(args, train_model)
+        scheduler.step(v_loss)
+        print("--- validation loss: %f" % v_loss)
+        writer.add_scalars("loss/grouped", {'validation': v_loss, 'train': running_loss/1000}, i*num_iters+j)
+        writer.add_scalar("loss/validation", v_loss, i*num_iters+j)
+        writer.add_scalar("loss/train", running_loss/1000, i*num_iters+j)
+        running_loss = 0
+        for name, param in train_model.named_parameters():
+            writer.add_histogram(name, param.clone().cpu().data.numpy(), i*num_iters+j)
+        
         if (i+1) % args.s == 0:
             th.save(train_model, dir_name+'/'+str(i)+'_'+exe_time+'.pt')
         
