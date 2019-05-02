@@ -2,7 +2,7 @@
 import torch as th
 import numpy as np
 import os
-import scipy.misc
+# import scipy.misc
 from torch.nn import Sigmoid
 from time import ctime
 from PIL import Image
