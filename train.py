@@ -102,9 +102,9 @@ def train(args):
         v_loss = validate(args, train_model)
         scheduler.step(v_loss)
         print("--- validation loss: %f" % v_loss)
-        writer.add_scalars("loss/grouped", {'validation': v_loss, 'train': running_loss/1000}, i*num_iters+j)
+        writer.add_scalars("loss/grouped", {'validation': v_loss, 'train': running_loss/num_iters}, i*num_iters+j)
         writer.add_scalar("loss/validation", v_loss, i*num_iters+j)
-        writer.add_scalar("loss/train", running_loss/1000, i*num_iters+j)
+        writer.add_scalar("loss/train", running_loss/num_iters, i*num_iters+j)
         running_loss = 0
         for name, param in train_model.named_parameters():
             writer.add_histogram(name, param.clone().cpu().data.numpy(), i*num_iters+j)
