@@ -3,26 +3,21 @@ import torch as th
 import numpy as np
 import os
 import scipy.misc
-# from matplotlib import pyplot
 from torch.nn import Sigmoid
-# from torch import save
 from time import ctime
 from PIL import Image
 from torchvision.utils import save_image
-# from scipy.misc import imsave
-# from train import load_data
 
 def data_loader(args, fname, feature_num=21):
-    max_shape = (464, 464)
+    # max_shape = (464, 464)
     dp = args.data_path
     data_dir = 'data_'+str(args.pad*2)+'/'
-    # label_dir = 'gt_200/'
     data = []
     names = []
     for name in fname:
         features = []
         for i in range(feature_num):
-           features.append(np.pad(np.load(dp+data_dir+str(i)+'_'+name), 68, 'constant'))
+           features.append(np.load(dp+data_dir+str(i)+'_'+name))
         features = np.asarray(features)
         data.append(features)
         names.append(name)
@@ -35,37 +30,43 @@ def save_results(args, model, idx):
         os.mkdir(dir_name)
     data_idx = np.load(args.data_path+'tdIdx.npy') if idx=='train' else np.load(args.data_path+'vdIdx.npy')
     sig = Sigmoid()
-    # bs = args.batch_size
-    num_iters = (data_idx.shape[0])
+    bs = args.batch_size
+    num_iters = (data_idx.shape[0])//bs
+    
     for i in range(num_iters):
-        in_d, names = data_loader(args, [data_idx[i]])
+        in_d, names = data_loader(args, data_idx[i*bs:(i+1)*bs])
         in_d = th.tensor(in_d)
         ignore = 1 - ((in_d[:, 0, :, :]==1) + (in_d[:, 0, :, :]==0))
         prds = sig(model.forward(in_d.cuda()))
+        del in_d
         prds[ignore.unsqueeze(1)] = 0
         for j in range(prds.shape[0]):
-            # save_image(prds[j, 0, :, :], dir_name+'/'+names[j].split('.')[0]+'.tif', range=(0,1))
-            np.save(dir_name+'/'+names[j], prds[j, 0, 132:132+200, 132:132+200].cpu().data.numpy())
-            # np.save(dir_name+'/'+names[j], prds[j, 0, args.pad:-args.pad, args.pad:-args.pad].cpu().data.numpy())
+            np.save(dir_name+'/'+names[j], prds[j, 0, args.pad:-args.pad, args.pad:-args.pad].cpu().data.numpy())
+    
+    del in_d, prds
+    in_d, names = data_loader(args, data_idx[-(data_idx.shape[0]-num_iters*bs):])
+    in_d = th.tensor(in_d)
+    ignore = 1 - ((in_d[:, 0, :, :]==1) + (in_d[:, 0, :, :]==0))
+    prds = sig(model.forward(in_d.cuda()))
+    del in_d
+    prds[ignore.unsqueeze(1)] = 0
+    for j in range(prds.shape[0]):
+        np.save(dir_name+'/'+names[j], prds[j, 0, args.pad:-args.pad, args.pad:-args.pad].cpu().data.numpy())
 
 def unite_imgs(data_path, orig_shape, ws):
     img_names = os.listdir(data_path)
     (h, w) = orig_shape
     names = [e for e in img_names if '.npy' in e]
-    # big_img = Image.new('RGB', (w, h)) # default is black
     big_img = np.zeros((h, w))
+
     for name in names:
         r, c = name.split('.')[0].split('_')
         r, c = int(r), int(c)
-        # big_img.paste(Image.open(data_path+name), (int(c)*ws, int(r)*ws))
         big_img[r*ws:(r+1)*ws, c*ws:(c+1)*ws] = np.load(data_path+name)
+    
     dir_name = data_path+'whole'
     if not os.path.exists(dir_name):
         os.mkdir(dir_name)
-    print(big_img.dtype)
-    # big_img.save(dir_name+'/prediction.tif')
-    # imsave(dir_name+'/prediction.tif', big_img)
-    # scipy.misc.toimage(big_img, cmin=0.0, cmax=1.0, mode='F').save('prediction.tif')
     np.save(dir_name+'/prediction.npy', big_img)
 
 def magnify(img_path = "../image_data/veneto_new_version/n_label.tif"):
