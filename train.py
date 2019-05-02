@@ -133,6 +133,7 @@ def train(args):
                 loss_20 += loss.item
 
                 if (i*num_iters*10+j*10+k+1) % 20 == 0:
+                    print("average training loss after 20 iters: %f" % loss_20/20)
                     writer.add_scalar("loss/train_20", loss_20/20, i*num_iters*10+j*10+k+1)
                     loss_20 = 0
 
