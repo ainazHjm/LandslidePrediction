@@ -4,6 +4,8 @@ import argparse
 # from os import listdir
 import os
 from PIL import Image
+from utils import args
+from time import ctime
 # from torchvision import transforms
 
 Image.MAX_IMAGE_PIXELS = 1000000000
@@ -12,11 +14,11 @@ def get_args():
     parser = argparse.ArgumentParser(description="Data Preparation")
     parser.add_argument("--img_dir_path", type=str, default="../image_data/Piemonte/")
     parser.add_argument("--save_to", type=str, default="../image_data/data/Piemonte/")
-    # parser.add_argument("--patch_wsize", type=int, default=200)
     parser.add_argument("--feature_names", type=str, default="litho, landcover, slope")
     parser.add_argument("--ground_truth_name", type=str, default="polygon_shallow_soil_slide.tif")
     parser.add_argument("--img_format", type=str, default="tif")
     parser.add_argument("--pad", type=int, default=64)
+    parser.add_argument("--label_pos", nargs='+', type=args.pos)
     # parser.add_argument("--img_size", type=(int,int), default=(20340, 26591))
     return parser.parse_args()
 
@@ -47,36 +49,52 @@ def zero_one(np_img):
     np_img[zeros]=0
     return np_img
 
+def oversample(args, directory_path, data):
+    print('%s --- oversampling pos images ...' % ctime())
+    (h, w) = data.shape
+    h, w = h-args.pad*2, w-args.pad*2
+    lpos = args.label_pos
+    for e in lpos:
+        (l0, l1, u0, u1) = e
+        l0, l1, u0, u1 = l0//50, l1//50, (u0//50)+1, (u1//50)+1
+        for row in range(l0, u0):
+            for col in range(l1, u1):
+                np.save(
+                    directory_path+str(row)+'_'+str(col)+'_'+str(50)+'.npy',
+                    data[row*50:(row+1)*50+args.pad*2+150, col*50:(col+1)*50+args.pad*2+150]
+                )
+    print('%s --- oversampling done: %d.' %(ctime(), 3*(u0-l0)*(u1-l1)))
+
 def write(directory_path, data, feature_num, pad):
+    print('%s --- writing images for feature %d.' %(ctime(), feature_num))
+    if not os.path.exists(directory_path+str(feature_num)):
+        os.mkdir(directory_path+str(feature_num))
+    dir_name = directory_path+str(feature_num)+'/'
     (h, w) = data.shape
     h, w = h-pad*2, w-pad*2
     for i in range(h//200):
         for j in range(w//200):
-            np.save(directory_path+'/'+str(feature_num)+'_'+str(i)+'_'+str(j)+'.npy', data[i*200:(i+1)*200+pad*2, j*200:(j+1)*200+pad*2])
+            np.save(
+                dir_name+str(i)+'_'+str(j)+'_'+str(200)+'.npy',
+                data[i*200:(i+1)*200+pad*2, j*200:(j+1)*200+pad*2]
+            )
+    print('%s --- wrote images with stride 200: %d.' %(ctime(), (h//200)*(w//200)))
 
 def preprocess():
     args = get_args()
-    # ws = args.patch_wsize
-    # ws = 600 # input_image size should be 600
-    # gtws = 200 # output image size should be 200
     fn = args.feature_names.split(", ")
-    # gtn = args.ground_truth_name
+    gtn = args.ground_truth_name
     path = args.img_dir_path
     files = os.listdir(path)
 
-    # gt_directory = args.save_to + 'gt_' + str(200)
-    # if not os.path.exists(gt_directory):
-    #     os.mkdir(gt_directory)
-    data_directory = args.save_to + 'data_' + str(args.pad*2)
+    data_directory = args.save_to + 'data_' + str(args.pad*2)+'/'
     if not os.path.exists(data_directory):
         os.mkdir(data_directory)
     
-    # data = []
     cnt = 0
     for feature_name in fn:
         for img_path in files:
             if feature_name in img_path:
-                # print(feature_name)
                 im = Image.open(path+img_path)
                 if feature_name=="litho" or feature_name=="landcover":
                     im = np.asarray(im, dtype=np.float16)
@@ -87,16 +105,15 @@ def preprocess():
                 if args.pad != 0:
                     im = np.pad(im, args.pad, 'constant') # pads with zeros
                 write(data_directory, im, cnt, args.pad)
+                if args.label_pos:
+                    oversample(args, data_directory+str(cnt)+'/', im)
                 cnt += 1
                 print("%d feature(s) are loaded ..." % cnt, end="\r")
         print(">> all %s features have been loaded." % feature_name)
-    # gt = np.array(Image.open(path+gtn))
-    # gt = zero_one(gt)
-    # (h, w) = gt.shape
-    # for i in range(h//200):
-    #     for j in range(w//200):
-    #         np.save(gt_directory+'/'+str(i)+'_'+str(j)+'.npy', gt[i*200:(i+1)*200, j*200:(j+1)*200])
+    gt = np.array(Image.open(path+gtn))
+    gt = zero_one(gt)
+    write(data_directory, gt, 'gt', args.pad)
+    oversample(args, data_directory+'gt/', gt)
     print("all images are saved in %s." % args.save_to)
-    
 
 preprocess()

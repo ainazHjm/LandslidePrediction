@@ -40,9 +40,11 @@ def load_data(args, fname, angle, feature_num=21):
             # if hdif< 0 or wdif < 0:
             #     raise ValueError
             # features.append(np.pad(rotated, ((hdif//2, hdif-hdif//2), (wdif//2, wdif-wdif//2)), 'constant')) # 2d shape
-            hdif = rotated.shape[0] - img.shape[0] - args.pad
-            wdif = rotated.shape[1] - img.shape[1] - args.pad
-            features.append(rotated[hdif//2:-(hdif-hdif//2), wdif//2:-(wdif-wdif//2)]) # 2d shape
+            dif = rotated.shape[0] - img.shape[0]
+            if dif == 0:
+                features.append(rotated)
+            else:
+                features.append(rotated[dif//2:-(dif-dif//2), dif//2:-(dif-dif//2)]) # 2d shape
         features = np.asarray(features)
         data.append(features)
         gt = np.load(dp+label_dir+name)
@@ -52,9 +54,8 @@ def load_data(args, fname, angle, feature_num=21):
         # if gt_hdif < 0 or gt_wdif < 0:
         #     raise ValueError
         # gt = np.pad(rotated, ((gt_hdif//2, gt_hdif-gt_hdif//2), (gt_wdif//2, gt_wdif-gt_wdif//2)), 'constant')
-        gt_hdif = rotated.shape[0] - gt.shape[0]
-        gt_wdif = rotated.shape[1] - gt.shape[1]
-        gt = rotated[gt_hdif//2:-(gt_hdif-gt_hdif//2), gt_wdif//2:-(gt_wdif-gt_wdif//2)]
+        dif = rotated.shape[0] - gt.shape[0]
+        gt = rotated if dif == 0 else rotated[dif//2:-(dif-dif//2), dif//2:-(dif-dif//2)]
         label.append(gt.reshape(1, gt.shape[0], gt.shape[1]))
     return np.asarray(data), np.asarray(label) #4d shape
 
@@ -105,7 +106,7 @@ def train(args):
         train_model.load_state_dict(th.load(args.load_model).state_dict())
     print("model is initialized ...")
     optimizer = to.Adam(train_model.parameters(), lr = args.lr, weight_decay = args.decay)
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=5)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=3)
     criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([1000]).cuda())
     # criterion = nn.BCEWithLogitsLoss()
 
@@ -127,13 +128,13 @@ def train(args):
                 loss.backward()
                 optimizer.step()
 
-                writer.add_scalar("loss/train_iter", loss.item(), i*num_iters+j)
+                writer.add_scalar("loss/train_iter", loss.item(), i*num_iters*10+j*10+k+1)
                 running_loss += loss.item()
                 loss_100 += loss.item()
-                loss_20 += loss.item
+                loss_20 += loss.item()
 
                 if (i*num_iters*10+j*10+k+1) % 20 == 0:
-                    print("average training loss after 20 iters: %f" % loss_20/20)
+                    print("average training loss after 20 iters: %f" % (loss_20/20))
                     writer.add_scalar("loss/train_20", loss_20/20, i*num_iters*10+j*10+k+1)
                     loss_20 = 0
 
