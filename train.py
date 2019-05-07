@@ -29,7 +29,8 @@ def load_data(args, fname, feature_num=21):
 def validate(args, model):
     with th.no_grad():
         valIdx = np.load(args.data_path+'vdIdx.npy')
-        criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([1000]).cuda())
+        # criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([1000]).cuda())
+        criterion = nn.BCEWithLogitsLoss()
         running_loss = 0
         bs = args.batch_size
         num_iters = valIdx.shape[0]//bs
@@ -68,8 +69,8 @@ def train(args):
 
     optimizer = to.Adam(train_model.parameters(), lr = args.lr, weight_decay = args.decay)
     scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=5)
-    criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([1000]).cuda())
-
+    # criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([1000]).cuda())
+    criterion = nn.BCEWithLogitsLoss()
     bs = args.batch_size
     num_iters = train_data.shape[0]//bs
     print(num_iters)
