@@ -30,6 +30,7 @@ def validate(args, model):
         dIp = '/'.join(args.data_path.split('/')[:-2])+'/'
         valIdx = np.load(dIp+'vdIdx.npy')
         criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([20]).cuda())
+
         running_loss = 0
         bs = args.batch_size
         data_batch_size = valIdx.shape[0]//10
@@ -76,8 +77,7 @@ def train(args):
 
     optimizer = to.Adam(train_model.parameters(), lr = args.lr, weight_decay = args.decay)
     scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=5)
-    criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([20]).cuda())
-
+    criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([20]).cuda()
     bs = args.batch_size
     # num_iters = train_data.shape[0]//bs
     running_loss, loss_100 = 0, 0

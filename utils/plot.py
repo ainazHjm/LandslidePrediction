@@ -10,7 +10,7 @@ from torchvision.utils import save_image
 
 def data_loader(args, fname, feature_num=21):
     dp = args.data_path
-    data_dir = 'data_600/'
+    data_dir = 'data_'+str(args.pad*2)+'/'
     # label_dir = 'gt_200/'
     data = []
     names = []
@@ -29,17 +29,27 @@ def save_results(args, model, idx):
         os.mkdir(dir_name)
     
     data_idx = np.load(args.data_path+'tdIdx.npy') if idx == 'train' else np.load(args.data_path+'vdIdx.npy')
-    num_iters = (data_idx.shape[0])
+    num_iters = (data_idx.shape[0])//args.batch_size
     sig = Sigmoid()
 
     for i in range(num_iters):
-        in_d, names = data_loader(args, [data_idx[i]])
+        in_d, names = data_loader(args, data_idx[i*args.batch_size:(i+1)*args.batch_size])
         in_d = th.tensor(in_d)
         ignore = 1 - ((in_d[:, 0, :, :]==1) + (in_d[:, 0, :, :]==0))
         prds = sig(model.forward(in_d.cuda()))
+        del in_d
         prds[ignore.unsqueeze(1)] = 0
         for j in range(prds.shape[0]):
             np.save(dir_name+'/'+names[j], prds[j, 0, args.pad:-args.pad, args.pad:-args.pad].cpu().data.numpy())
+    del prds
+    in_d, names = data_loader(args, data_idx[-data_idx.shape[0]+num_iters*args.batch_size:])
+    in_d = th.tensor(in_d)
+    ignore = 1 - ((in_d[:, 0, :, :]==1) + (in_d[:, 0, :, :]==0))
+    prds = sig(model.forward(in_d.cuda()))
+    del in_d
+    prds[ignore.unsqueeze(1)] = 0
+    for i in range(prds.shape[0]):
+        np.save(dir_name+'/'+names[i], prds[i, 0, args.pad:-args.pad, args.pad:-args.pad].cpu().data.numpy())
 
 def unite_imgs(data_path, orig_shape, ws):
     (h, w) = orig_shape
