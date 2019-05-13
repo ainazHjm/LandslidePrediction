@@ -16,8 +16,9 @@ def get_args():
     parser.add_argument("--decay", type=float, default=0)
     parser.add_argument("--load_model", type=str, default='')
     parser.add_argument("--validate", type=str2bool, default=False)
-    parser.add_argument("--data_path", type=str, default="../image_data/data/Piemonte/")
-    parser.add_argument("--save_model_to", type=str, default="../models/CNN/Piemonte/")
+    parser.add_argument("--data_path", type=str, default="../image_data/data/")
+    parser.add_argument("--save_model_to", type=str, default="../models/CNN/")
+    parser.add_argument("--region", type=str, default='Veneto')
     parser.add_argument("--pix_res", type=int, default=10)
     parser.add_argument("--s", type=int, default=5) #save the model at how many epochs
     parser.add_argument("--c", type=str2bool, default=False)
