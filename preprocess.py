@@ -4,6 +4,7 @@ import argparse
 # from os import listdir
 import os
 import h5py
+import json
 from PIL import Image
 from utils import args
 from time import ctime
@@ -49,8 +50,8 @@ def normalize(np_img, f = 'slope'):
 
 def zero_one(np_img):
     # ones = np_img==1
-    zeros = np_img==255
-    np_img[zeros]=0
+    ones = np_img!=0
+    np_img[ones]=1
     return np_img
 
 def oversample(args, directory_path, data, pad):
@@ -130,11 +131,13 @@ def write(directory_path, data, feature_num, pad):
 
 def process_data():
     args = get_args()
+    g = open('data_dict.json', 'r')
+    data_dict = json.load(g)
+    g.close()
     f = h5py.File(args.save_to+args.name, 'a')
-
+    
     for data_path in args.data_dir:
         name = data_path.split('/')[-2]
-        # files = os.listdir(data_path)
         for n, h, w in args.shape:
             if n == name and not name in f.keys():
                 f.create_dataset(name+'/data', (args.feature_num, h, w), dtype='f')
@@ -143,34 +146,19 @@ def process_data():
     
     for data_path in args.data_dir:
         name = data_path.split('/')[-2]
-        # files = os.listdir(data_path)
-        for num in range(args.feature_num):
-            img = Image.open(data_path+str(num)+args.data_format)
-            img = np.asarray(img, dtype=np.float32)
-            if num == 0 or num == args.feature_num-1:
-                img = normalize(img)
-            else:
-                print('find_no_data') #TODO
-    
+        images = os.listdir(data_path)
+        for img in images:
+            if args.data_format in img and not '.xml' in img and not 'gt' in img:
+                t = np.asarray(Image.open(data_path+img), dtype=np.float32)
+                if data_dict[img] == 0:
+                    t = normalize(t, 'slope')
+                elif data_dict[img] == args.feature_num-1:
+                    t = normalize(t, 'DEM')
+                else:
+                    t = convert_nodata(t)
+                f[name+'/data'][data_dict[img]] = t
+        f[name+'/gt'] = zero_one(np.asarray(Image.open(data_path+'gt'+args.data_format), dtype=np.float32))
+
     f.close()
 
 process_data()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
