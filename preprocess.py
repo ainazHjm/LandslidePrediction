@@ -16,8 +16,8 @@ def get_args():
     parser = argparse.ArgumentParser(description="Data Preparation")
     parser.add_argument("--data_dir", action="append", type=str)
     parser.add_argument("--name", type=str, default="landslide.h5")
-    parser.add_argument("--save_to", type=str, default="../image_data/data/Piemonte/")
-    parser.add_argument("--feature_num", type=int, default=21)
+    parser.add_argument("--save_to", type=str, default="../image_data/")
+    parser.add_argument("--feature_num", type=int, default=94)
     parser.add_argument('--shape', action='append', type=args.shape)
     # parser.add_argument("--feature_names", type=str, default="litho, landcover, slope")
     # parser.add_argument("--ground_truth_name", type=str, default="polygon_shallow_soil_slide.tif")
@@ -31,15 +31,14 @@ def convert_nodata(np_img):
     '''
     convert a binary image with no data pts (value=127) to a binary image with no data values being the mean.
     '''
-    nodata = np_img==127
-    data = np_img!=127
+    data = np_img.all()==1 + np_img.all()==0
+    nodata = 1-data
     mean = np.mean(np_img[data])
     np_img[nodata] = mean
+    # import ipdb; ipdb.set_trace()
     return np_img
 
 def normalize(np_img, f = 'slope'):
-    # nodata = np_img < 0
-    # overlimit = np_img > 180
     if f == 'slope':
         np_img[np_img < 0] = 0
         np_img[np_img > 180] = 0
@@ -54,43 +53,113 @@ def zero_one(np_img):
     np_img[ones]=1
     return np_img
 
-def oversample(args, directory_path, data, pad):
-    print('%s --- oversampling pos images ...' % ctime())
-    (h, w) = data.shape
-    h, w = h-pad*2, w-pad*2
-    lpos = args.label_pos
-    cnt = 0
-    for e in lpos:
-        (l0, l1, u0, u1) = e
-        l0, l1, u0, u1 = l0//10, l1//10, (u0//10)+1, (u1//10)+1
-        for row in range(l0, u0):
-            for col in range(l1, u1):
-                if (row+20)*10+pad*2 > data.shape[0] or (col+20)*10+pad*2 > data.shape[1]:
-                    print('ignoring this batch')
-                    continue
-                np.save(
-                    directory_path+str(row)+'_'+str(col)+'_10'+'.npy',
-                    data[row*10:(row+20)*10+pad*2, col*10:(col+20)*10+pad*2]
-                )
-                cnt += 1
-                #if (row+10)*20+pad*2 > data.shape[0] or (col+10)*20+pad*2 > data.shape[2]:
-                #    raise ValueError
-    print('%s --- oversampling done: %d.' %(ctime(), cnt))
+def initialize(f, key):
+    (n, h, w) = f[key]['train/data'].shape
+    (_, hg, wg) = f[key]['test/data'].shape
+    zero_train = np.zeros((h, w))
+    zero_test = np.zeros((hg, wg))
+    for i in range(n):
+        f[key]['train/data'][i] = zero_train
+        f[key]['test/data'][i] = zero_test
+        print('%s -> %d/%d' %(ctime(), i+1, n), end='\r')
+    return f
 
-def write(directory_path, data, feature_num, pad):
-    print('%s --- writing images for feature %s.' %(ctime(), str(feature_num)))
-    if not os.path.exists(directory_path+str(feature_num)):
-        os.mkdir(directory_path+str(feature_num))
-    dir_name = directory_path+str(feature_num)+'/'
-    (h, w) = data.shape
-    h, w = h-pad*2, w-pad*2
-    for i in range(h//100-1):
-        for j in range(w//100-1):
-            np.save(
-                dir_name+str(i)+'_'+str(j)+'_100'+'.npy',
-                data[i*100:(i+2)*100+pad*2, j*100:(j+2)*100+pad*2]
-            )
-    print('%s --- wrote images with stride 100: %d.' %(ctime(), (h//100-1)*(w//100-1)))
+def process_data():
+    args = get_args()
+    g = open('data_dict.json', 'r')
+    data_dict = json.load(g)
+    g.close()
+    f = h5py.File(args.save_to+args.name, 'a')
+    
+    for data_path in args.data_dir:
+        name = data_path.split('/')[-2]
+        for n, h, w in args.shape:
+            hv = h//5
+            if n == name and not name in f.keys():
+                f.create_dataset(
+                    name+'/test/data',
+                    (args.feature_num, hv+args.pad*2, w+args.pad*2),
+                    dtype='f',
+                    compression='lzf'
+                )
+                f.create_dataset(name+'/test/gt', (1, hv, w), dtype='f', compression='lzf')
+                f.create_dataset(
+                    name+'/train/data',
+                    (args.feature_num, h-hv+args.pad*2, w+args.pad*2),
+                    dtype='f',
+                    compression='lzf'
+                )
+                f.create_dataset(name+'/train/gt', (1, h-hv, w), dtype='f', compression='lzf')
+                print('created data and gt in %s' %name)
+                break
+        f = initialize(f, name)
+
+    print(list(f.keys()))
+    for data_path in args.data_dir:
+        name = data_path.split('/')[-2]
+        images = os.listdir(data_path)
+        for img in images:
+            if args.data_format in img and not '.xml' in img and not 'gt' in img:
+                t = np.array(Image.open(data_path+img))
+                n_ = img.split('.')[0]
+                if data_dict[n_] == 0:
+                    t = normalize(t, 'slope')
+                elif data_dict[n_] == args.feature_num-1:
+                    t = normalize(t, 'DEM')
+                else:
+                    # t = convert_nodata(zero_one(t))
+                    t = zero_one(t)
+                print(data_dict[n_])
+                hlen = t.shape[0]//5
+                f[name+'/train/data'][int(data_dict[n_])] = np.pad(np.concatenate((t[0:hlen, :], t[2*hlen:, :]), 0), args.pad, 'constant')
+                f[name+'/test/data'][int(data_dict[n_])] = np.pad(t[hlen:2*hlen, :], args.pad, 'constant')
+        gt = np.array(Image.open(data_path+'gt'+args.data_format))
+        gt = zero_one(gt)
+        hlen = gt.shape[0]//5
+        f[name+'/train/gt'][0] = np.concatenate((gt[0:hlen, :], gt[2*hlen:, :]), 0)
+        f[name+'/test/gt'][0] = gt[hlen:2*hlen, :]
+
+    f.close()
+
+process_data()
+
+# def oversample(args, directory_path, data, pad):
+#     print('%s --- oversampling pos images ...' % ctime())
+#     (h, w) = data.shape
+#     h, w = h-pad*2, w-pad*2
+#     lpos = args.label_pos
+#     cnt = 0
+#     for e in lpos:
+#         (l0, l1, u0, u1) = e
+#         l0, l1, u0, u1 = l0//10, l1//10, (u0//10)+1, (u1//10)+1
+#         for row in range(l0, u0):
+#             for col in range(l1, u1):
+#                 if (row+20)*10+pad*2 > data.shape[0] or (col+20)*10+pad*2 > data.shape[1]:
+#                     print('ignoring this batch')
+#                     continue
+#                 np.save(
+#                     directory_path+str(row)+'_'+str(col)+'_10'+'.npy',
+#                     data[row*10:(row+20)*10+pad*2, col*10:(col+20)*10+pad*2]
+#                 )
+#                 cnt += 1
+#                 #if (row+10)*20+pad*2 > data.shape[0] or (col+10)*20+pad*2 > data.shape[2]:
+#                 #    raise ValueError
+#     print('%s --- oversampling done: %d.' %(ctime(), cnt))
+
+# def write(directory_path, data, feature_num, pad):
+#     print('%s --- writing images for feature %s.' %(ctime(), str(feature_num)))
+#     if not os.path.exists(directory_path+str(feature_num)):
+#         os.mkdir(directory_path+str(feature_num))
+#     dir_name = directory_path+str(feature_num)+'/'
+#     (h, w) = data.shape
+#     h, w = h-pad*2, w-pad*2
+#     for i in range(h//100-1):
+#         for j in range(w//100-1):
+#             np.save(
+#                 dir_name+str(i)+'_'+str(j)+'_100'+'.npy',
+#                 data[i*100:(i+2)*100+pad*2, j*100:(j+2)*100+pad*2]
+#             )
+#     print('%s --- wrote images with stride 100: %d.' %(ctime(), (h//100-1)*(w//100-1)))
 
 # def preprocess():
 #     args = get_args()
@@ -128,37 +197,3 @@ def write(directory_path, data, feature_num, pad):
 #     print("all images are saved in %s." % args.save_to)
 
 # preprocess()
-
-def process_data():
-    args = get_args()
-    g = open('data_dict.json', 'r')
-    data_dict = json.load(g)
-    g.close()
-    f = h5py.File(args.save_to+args.name, 'a')
-    
-    for data_path in args.data_dir:
-        name = data_path.split('/')[-2]
-        for n, h, w in args.shape:
-            if n == name and not name in f.keys():
-                f.create_dataset(name+'/data', (args.feature_num, h, w), dtype='f')
-                f.create_dataset(name+'/gt', (1, h, w), dtype='f')
-                break
-    
-    for data_path in args.data_dir:
-        name = data_path.split('/')[-2]
-        images = os.listdir(data_path)
-        for img in images:
-            if args.data_format in img and not '.xml' in img and not 'gt' in img:
-                t = np.asarray(Image.open(data_path+img), dtype=np.float32)
-                if data_dict[img] == 0:
-                    t = normalize(t, 'slope')
-                elif data_dict[img] == args.feature_num-1:
-                    t = normalize(t, 'DEM')
-                else:
-                    t = convert_nodata(t)
-                f[name+'/data'][data_dict[img]] = t
-        f[name+'/gt'] = zero_one(np.asarray(Image.open(data_path+'gt'+args.data_format), dtype=np.float32))
-
-    f.close()
-
-process_data()
