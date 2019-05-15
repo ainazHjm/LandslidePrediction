@@ -30,13 +30,15 @@ def validate(args, model, test_loader):
     with th.no_grad():
         criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([20]).cuda())
         running_loss = 0
-        for batch_sample in test_loader:
-            prds = model.forward(batch_sample['data'])
+        test_loader_iter = iter(test_loader)
+        for batch_idx in range(len(test_loader_iter)):
+            batch_sample = test_loader_iter.next()
+            prds = model.forward(batch_sample['data'].cuda())
             loss = criterion(
                 prds[:, :, args.pad:-args.pad, args.pad:-args.pad].view(-1, 1, args.ws, args.ws),
-                batch_sample['gt'])
+                batch_sample['gt'].cuda())
             running_loss += loss.item()
-        return running_loss/len(test_loader.dataset)
+        return running_loss/len(test_loader_iter)
 
 def train(args, train_loader, test_loader):
     '''
@@ -99,7 +101,7 @@ def train(args, train_loader, test_loader):
         scheduler.step(v_loss)
         writer.add_scalars(
             "loss/grouped",
-            {'test': v_loss, 'train': running_loss/len(train_loader.dataset)},
+            {'test': v_loss, 'train': running_loss/len(train_loader_iter)},
             epoch
         )
         for name, param in train_model.named_parameters():
