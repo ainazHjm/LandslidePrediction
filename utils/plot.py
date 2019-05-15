@@ -24,7 +24,7 @@ def data_loader(args, fname, feature_num=21):
     return np.asarray(data), np.asarray(names) #4d shape
 
 def save_results(args, model, idx):
-    dir_name = args.save_res_to + args.load_model.split('/')[-1].split('.')[0]
+    dir_name = args.save_res_to + args.region + '/' + args.load_model.split('/')[-1].split('.')[0]
     if not os.path.exists(dir_name):
         os.mkdir(dir_name)
     
@@ -90,3 +90,8 @@ def vis_res(prd_path, bg_img_path):
     bg.paste(fg, paste_loc)
     bg.save("new_"+name+".jpg")
     # bg.show()
+
+def save_config(path, args):
+    with open(path, 'w') as f:
+        for key in args.__dict__.keys():
+            f.write(str(key)+': '+str(args.__dict__[key]))
