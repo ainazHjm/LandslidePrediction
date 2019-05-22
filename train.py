@@ -28,7 +28,8 @@ from utils.plot import save_config
 
 def validate(args, model, test_loader):
     with th.no_grad():
-        criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([20]).cuda())
+        # criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([20]).cuda())
+        criterion = nn.BCEWithLogitsLoss()
         running_loss = 0
         test_loader_iter = iter(test_loader)
         for batch_idx in range(len(test_loader_iter)):
@@ -65,7 +66,8 @@ def train(args, train_loader, test_loader):
 
     optimizer = to.Adam(train_model.parameters(), lr = args.lr, weight_decay = args.decay)
     scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=5)
-    criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([20]).cuda())
+    # criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([20]).cuda())
+    criterion = nn.BCEWithLogitsLoss()
 
     loss_100 = 0
     for epoch in range(args.n_epochs):

@@ -3,9 +3,9 @@ import train
 import argparse
 import torch as th
 import numpy as np
-from utils.args import str2bool
+from utils.args import str2bool, __range
 from utils.plot import save_results
-from loader import LandslideDataset
+from loader import LandslideDataset, LandslideTrainDataset
 from torch.utils.data import DataLoader
 
 def get_args():
@@ -29,15 +29,50 @@ def get_args():
     parser.add_argument("--c", type=str2bool, default=True)
     parser.add_argument("--pad", type=int, default=64)
     parser.add_argument("--feature_num", type=int, default=94)
+    parser.add_argument("--oversample_pts", action='append', type=__range)
     parser.add_argument("--save_res_to", type=str, default='../output/CNN/')
     return parser.parse_args()
 
+# def oversample(args, dataset):
+#     data_batch_len = len(dataset)//10
+#     loader = DataLoader(dataset, batch_size=data_batch_len, num_workers=4)
+#     loader_iter = iter(loader)
+#     oversample_idx = []
+#     for i in range(len(loader_iter)):
+#         samples = loader_iter.next()
+#         (b, _, h, w) = samples['gt'].shape # _ should be 1
+#         indices = th.sum(samples['gt'].view(b, -1), 1) > 0
+#         th.nonzero(indices)
+
 def main():
     args = get_args()
-    trainData = LandslideDataset(args.data_path, args.region, args.stride, args.ws, 'train')
-    testData = LandslideDataset(args.data_path, args.region, args.stride, args.ws, 'test')
-    train_loader = DataLoader(trainData, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
-    test_loader = DataLoader(testData, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+    trainData = LandslideTrainDataset(
+        args.data_path,
+        args.region,
+        args.stride,
+        args.ws,
+        args.oversample_pts,
+        args.pad
+    )
+    testData = LandslideDataset(
+        args.data_path,
+        args.region,
+        args.ws,
+        args.pad
+    )
+    import ipdb; ipdb.set_trace()
+    train_loader = DataLoader(
+        trainData,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=args.num_workers
+    )
+    test_loader = DataLoader(
+        testData,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=args.num_workers
+    )
 
     if args.validate:
         print("loading a trained model...", end='\r')

@@ -23,7 +23,7 @@ def get_args():
     # parser.add_argument("--ground_truth_name", type=str, default="polygon_shallow_soil_slide.tif")
     parser.add_argument("--data_format", type=str, default=".tif")
     parser.add_argument("--pad", type=int, default=64)
-    parser.add_argument("--label_pos", nargs='+', type=args.pos)
+    # parser.add_argument("--label_pos", nargs='+', type=args.pos)
     # parser.add_argument("--img_size", type=(int,int), default=(20340, 26591))
     return parser.parse_args()
 
