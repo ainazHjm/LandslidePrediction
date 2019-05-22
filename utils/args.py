@@ -9,11 +9,14 @@ def str2bool(input):
         raise argparse.ArgumentTypeError('Boolean input is expected.')
 
 def pos(s):
+    '''
+    input is in this format >> name:y0,y1,x0,x1
+    '''
     try:
-        x, y, z, w = map(int, s.split(','))
-        return x, y, z, w
+        input = s.split(':')
+        return {input[0]: tuple(map(int, input[1:].split(',')))}
     except:
-        raise argparse.ArgumentTypeError("Input type must be x, y, z, w.")
+        raise argparse.ArgumentTypeError("Input type must be name,y[0],y[1],x[0],x[1].")
 
 def shape(s):
     try:
@@ -21,3 +24,9 @@ def shape(s):
         return name, int(h), int(w)
     except:
         raise argparse.ArgumentTypeError('Input must be name(of the dataset), height, width.')
+
+def append_dict(*dicts):
+    '''
+    append multiple one element dictionaries.
+    '''
+    return {list(d.keys()): d[list(d.keys())[0]] for d in dicts}
