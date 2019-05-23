@@ -46,6 +46,8 @@ def get_args():
 
 def main():
     args = get_args()
+    args.oversample_pts = np.asarray(args.oversample_pts).reshape(-1, 4)
+    print(args.oversample_pts)
     trainData = LandslideTrainDataset(
         args.data_path,
         args.region,

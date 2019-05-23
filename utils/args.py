@@ -11,20 +11,22 @@ def str2bool(input):
 
 def process_in(s):
     '''
-    the data format is (r1, c1), (r2, c2)
+    the data format is (r1,c1,r2,c2)
     '''
-    r1 = s.split(', ')[0].split(', ') # '(r1' and 'c1)'
-    r2 = s.split(', ')[1].split(', ') # '(r2' and 'c2)'
-    row1, col1 = r1[0].split('(')[1], r1[1].split(')')[0]
-    row2, col2 = r2[0].split('(')[1], r2[1].split(')')[0]
-    row1, col1, row2, col2 = int(row1), int(col1), int(row2), int(col2)
-    return np.array([(row1, col1), (row2, col2)]).reshape(1, 2)
+    inp = s.split(',')
+    r1, c1, r2, c2 = int(inp[0].split('(')[1]), int(inp[1]), int(inp[2]), int(inp[3].split(')')[0])
+    #r1 = s.split('),(')[0].split(',') # '(r1' and 'c1'
+    #r2 = s.split('),(')[1].split(',') # '(r2' and 'c2'
+    #row1, col1 = int(r1[0].split('(')[1]), int(r1[1])
+    #row2, col2 = int(r2[0].split('(')[1]), int(r2[1])
+    # row1, col1, row2, col2 = int(row1), int(col1), int(row2), int(col2)
+    return np.array([r1, c1, r2, c2]).reshape(1, 4)
 
 def __range(s):
     try:
         return process_in(s)
     except:
-        raise argparse.ArgumentTypeError("Input type must be (r1, c1), (r2, c2).")
+        raise argparse.ArgumentTypeError("Input type must be (r1, c1, r2, c2).")
 
 def shape(s):
     try:
