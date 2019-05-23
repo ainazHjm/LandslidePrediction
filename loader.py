@@ -1,16 +1,17 @@
 from torch.utils.data import Dataset
 import h5py
+import numpy as np
 import torch as th
 
 class LandslideTrainDataset(Dataset):
     def __init__(self, path, region, stride, ws, pts, pad=64):
-        super(LandslideDataset, self).__init__()
+        super(LandslideTrainDataset, self).__init__()
         self.path = path
         self.ws = ws
         self.stride = stride
         self.region = region
         self.pad = pad
-        self.pts = pts #nx2 matrix consisting of (r1, c1), (r2, c2) points, r1<r2 & c1<c2
+        self.pts = pts #nx4 matrix consisting of r1, c1, r2, c2 points, r1<r2 & c1<c2
         self.data_len = self.len()
         self.pts_len = self.len_oversample() #nx1 matrix containing length of the data corresponding to pts
 
@@ -25,10 +26,10 @@ class LandslideTrainDataset(Dataset):
     def len_oversample(self):
         stride = self.stride//10
         leng = 0
-        pts_len = th.zeros(self.pts.shape[0], 1)
+        pts_len = np.zeros((self.pts.shape[0], 1))
         for i in range(self.pts.shape[0]):
-            h = self.pts[i,1][0] - self.pts[i,0][0]
-            w = self.pts[i,1][1] - self.pts[i,0][1]
+            h = self.pts[i,2] - self.pts[i,0]
+            w = self.pts[i,3] - self.pts[i,1]
             hnum = (h-self.ws)//stride + 1
             wnum = (w-self.ws)//stride + 1
             pts_len[i] = hnum*wnum
@@ -42,7 +43,7 @@ class LandslideTrainDataset(Dataset):
             return hnum*wnum
 
     def __len__(self):
-        return self.data_len + th.sum(self.pts_len)
+        return self.data_len + int(np.sum(self.pts_len))
 
     def get_item(self, index, dataset, gt, stride):
         (_, _, wlen) = gt.shape
@@ -75,15 +76,18 @@ class LandslideTrainDataset(Dataset):
                 sample = self.get_item(index, dataset, gt, self.stride)
             else:
                 pts_idx = self.identify_idx(index)
+                n_index = index-self.data_len if pts_idx==0 else index-(self.data_len+int(np.sum(self.pts_len[:pts_idx])))
                 sample = self.get_item(
-                    index - (self.data_len + th.sum(self.pts_len[:pts_idx])),
+                    n_index,
                     dataset[
-                        self.pts[pts_idx, 0][0]:self.pts[pts_idx, 1][0],
-                        self.pts[pts_idx, 0][1]:self.pts[pts_idx, 1][1]
+                        :,
+                        self.pts[pts_idx, 0]:self.pts[pts_idx, 2],
+                        self.pts[pts_idx, 1]:self.pts[pts_idx, 3]
                     ],
                     gt[
-                        self.pts[pts_idx, 0][0]:self.pts[pts_idx, 1][0],
-                        self.pts[pts_idx, 0][1]:self.pts[pts_idx, 1][1]
+                        :,
+                        self.pts[pts_idx, 0]:self.pts[pts_idx, 2],
+                        self.pts[pts_idx, 1]:self.pts[pts_idx, 3]
                     ],
                     self.stride//10
                 )  
