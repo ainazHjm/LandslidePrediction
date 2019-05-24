@@ -2,7 +2,7 @@
 import torch as th
 import numpy as np
 import os
-import scipy.misc
+# import scipy.misc
 from torch.nn import Sigmoid
 from time import ctime
 from PIL import Image
@@ -12,6 +12,7 @@ def data_loader(args, fname, feature_num=21):
     # max_shape = (464, 464)
     dp = args.data_path
     data_dir = 'data_'+str(args.pad*2)+'/'
+    # label_dir = 'gt_200/'
     data = []
     names = []
     for name in fname:
@@ -24,17 +25,16 @@ def data_loader(args, fname, feature_num=21):
     return np.asarray(data), np.asarray(names) #4d shape
 
 def save_results(args, model, idx):
-    th.cuda.empty_cache()
-    dir_name = args.save_res_to + args.load_model.split('/')[-1].split('.')[0]
+    dir_name = args.save_res_to + args.region + '/' + args.load_model.split('/')[-1].split('.')[0]
     if not os.path.exists(dir_name):
         os.mkdir(dir_name)
-    data_idx = np.load(args.data_path+'tdIdx.npy') if idx=='train' else np.load(args.data_path+'vdIdx.npy')
-    sig = Sigmoid()
-    bs = args.batch_size
-    num_iters = (data_idx.shape[0])//bs
     
+    data_idx = np.load(args.data_path+'tdIdx.npy') if idx == 'train' else np.load(args.data_path+'vdIdx.npy')
+    num_iters = (data_idx.shape[0])//args.batch_size
+    sig = Sigmoid()
+
     for i in range(num_iters):
-        in_d, names = data_loader(args, data_idx[i*bs:(i+1)*bs])
+        in_d, names = data_loader(args, data_idx[i*args.batch_size:(i+1)*args.batch_size])
         in_d = th.tensor(in_d)
         ignore = 1 - ((in_d[:, 0, :, :]==1) + (in_d[:, 0, :, :]==0))
         prds = sig(model.forward(in_d.cuda()))
@@ -42,20 +42,19 @@ def save_results(args, model, idx):
         prds[ignore.unsqueeze(1)] = 0
         for j in range(prds.shape[0]):
             np.save(dir_name+'/'+names[j], prds[j, 0, args.pad:-args.pad, args.pad:-args.pad].cpu().data.numpy())
-    
-    del in_d, prds
-    in_d, names = data_loader(args, data_idx[-(data_idx.shape[0]-num_iters*bs):])
+    del prds
+    in_d, names = data_loader(args, data_idx[-data_idx.shape[0]+num_iters*args.batch_size:])
     in_d = th.tensor(in_d)
     ignore = 1 - ((in_d[:, 0, :, :]==1) + (in_d[:, 0, :, :]==0))
     prds = sig(model.forward(in_d.cuda()))
     del in_d
     prds[ignore.unsqueeze(1)] = 0
-    for j in range(prds.shape[0]):
-        np.save(dir_name+'/'+names[j], prds[j, 0, args.pad:-args.pad, args.pad:-args.pad].cpu().data.numpy())
+    for i in range(prds.shape[0]):
+        np.save(dir_name+'/'+names[i], prds[i, 0, args.pad:-args.pad, args.pad:-args.pad].cpu().data.numpy())
 
 def unite_imgs(data_path, orig_shape, ws):
-    img_names = os.listdir(data_path)
     (h, w) = orig_shape
+    img_names = os.listdir(data_path)
     names = [e for e in img_names if '.npy' in e]
     big_img = np.zeros((h, w))
 
@@ -92,3 +91,8 @@ def vis_res(prd_path, bg_img_path):
     bg.paste(fg, paste_loc)
     bg.save("new_"+name+".jpg")
     # bg.show()
+
+def save_config(path, args):
+    with open(path, 'w') as f:
+        for key in args.__dict__.keys():
+            f.write(str(key)+': '+str(args.__dict__[key]))

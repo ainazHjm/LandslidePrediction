@@ -76,13 +76,25 @@ def normalize(train_data, val_data):
         print("validation>> mean: %f, std: %f" % (th.mean(val_data[i, :, :][v_indices].view(-1)).item(), th.std(val_data[i, :, :][v_indices].view(-1)).item()))
     return train_data, val_data
 
-def divide_data(path="../image_data/data/Piemonte/"):
+def divide_data(path):
     files = listdir(path)
     l = len(files)
     print(l)
+    np.random.shuffle(files)
     vi = int(0.2*l)+1
     vd = files[0:vi]
     td = files[vi:]
-    np.save(path+'vdIdx.npy', np.asarray(vd))
-    np.save(path+'tdIdx.npy', np.asarray(td))
+    np.save('../image_data/data/Piemonte/vdIdx.npy', np.asarray(vd))
+    np.save('../image_data/data/Piemonte/tdIdx.npy', np.asarray(td))
     print('data is divided.')
+
+def find_pos_imgs(path):
+    files = listdir(path)
+    names = []
+    cnt = 0
+    for f in files:
+        if np.sum(np.load(path+f)) > 0:
+            names.append(f)
+            cnt += 1
+    np.save('../image_data/data/Piemonte/pos_labels.npy', np.asarray(names))
+    print('--- %d of %d samples are positive >> %f.' %(cnt, len(files), cnt/len(files)))

@@ -1,5 +1,5 @@
 runs/
-runs_*/
+runs*/
 other_runs/
 .vscode/
 nohup.out
