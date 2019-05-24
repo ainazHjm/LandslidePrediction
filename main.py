@@ -5,8 +5,13 @@ import torch as th
 import numpy as np
 from utils.args import str2bool, __range
 from utils.plot import save_results
-from loader import LandslideDataset, LandslideTrainDataset
+from loader import LandslideDataset, LandslideTrainDataset, create_oversample_data
 from torch.utils.data import DataLoader
+
+def custom_collate_fn(batch):
+    in_data = th.stack([e['data'] for e in batch], 0)
+    label = th.stack([e['gt'] for e in batch], 0)
+    return {'data': in_data, 'gt': label}
 
 def get_args():
     parser = argparse.ArgumentParser(description="Training a CNN-Classifier for landslide prediction")
@@ -31,30 +36,22 @@ def get_args():
     parser.add_argument("--feature_num", type=int, default=94)
     parser.add_argument("--oversample_pts", action='append', type=__range)
     parser.add_argument("--save_res_to", type=str, default='../output/CNN/')
+    parser.add_argument("--oversample", type=str2bool, default=False)
     return parser.parse_args()
-
-# def oversample(args, dataset):
-#     data_batch_len = len(dataset)//10
-#     loader = DataLoader(dataset, batch_size=data_batch_len, num_workers=4)
-#     loader_iter = iter(loader)
-#     oversample_idx = []
-#     for i in range(len(loader_iter)):
-#         samples = loader_iter.next()
-#         (b, _, h, w) = samples['gt'].shape # _ should be 1
-#         indices = th.sum(samples['gt'].view(b, -1), 1) > 0
-#         th.nonzero(indices)
 
 def main():
     args = get_args()
     args.oversample_pts = np.asarray(args.oversample_pts).reshape(-1, 4)
-    print(args.oversample_pts)
+    oversample_path = create_oversample_data(args)
     trainData = LandslideTrainDataset(
         args.data_path,
         args.region,
         args.stride,
         args.ws,
         args.oversample_pts,
-        args.pad
+        oversample_path,
+        args.pad,
+        args.feature_num,
     )
     testData = LandslideDataset(
         args.data_path,
@@ -62,7 +59,6 @@ def main():
         args.ws,
         args.pad
     )
-    import ipdb; ipdb.set_trace()
     train_loader = DataLoader(
         trainData,
         batch_size=args.batch_size,
@@ -75,7 +71,7 @@ def main():
         shuffle=False,
         num_workers=args.num_workers
     )
-
+    # import ipdb; ipdb.set_trace()
     if args.validate:
         print("loading a trained model...", end='\r')
         model = th.load(args.load_model)

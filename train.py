@@ -32,7 +32,7 @@ def validate(args, model, test_loader):
         criterion = nn.BCEWithLogitsLoss()
         running_loss = 0
         test_loader_iter = iter(test_loader)
-        for batch_idx in range(len(test_loader_iter)):
+        for _ in range(len(test_loader_iter)):
             batch_sample = test_loader_iter.next()
             prds = model.forward(batch_sample['data'].cuda())
             loss = criterion(
@@ -76,6 +76,7 @@ def train(args, train_loader, test_loader):
         for batch_idx in range(len(train_loader_iter)):
             optimizer.zero_grad()
             batch_sample = train_loader_iter.next()
+            # import ipdb; ipdb.set_trace()
             prds = train_model.forward(batch_sample['data'].cuda())
             loss = criterion(
                 prds[:, :, args.pad:-args.pad, args.pad:-args.pad].view(-1, 1, args.ws, args.ws),
