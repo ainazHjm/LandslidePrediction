@@ -28,7 +28,7 @@ def get_args():
     parser.add_argument("--save_model_to", type=str, default="../models/CNN/")
     parser.add_argument("--region", type=str, default='Veneto')
     parser.add_argument("--pix_res", type=int, default=10)
-    parser.add_argument("--stride", type=int, default=100)
+    parser.add_argument("--stride", type=int, default=200)
     parser.add_argument("--ws", type=int, default=200)
     parser.add_argument("--s", type=int, default=5) #save the model at how many epochs
     parser.add_argument("--c", type=str2bool, default=True)
@@ -37,6 +37,7 @@ def get_args():
     parser.add_argument("--oversample_pts", action='append', type=__range)
     parser.add_argument("--save_res_to", type=str, default='../output/CNN/')
     parser.add_argument("--oversample", type=str2bool, default=False)
+    parser.add_argument("--patience", type=int, default=2)
     return parser.parse_args()
 
 def main():
