@@ -26,7 +26,7 @@ class LandslideTrainDataset(Dataset):
         raise ValueError
 
     def len_oversample(self):
-        stride = self.stride//10
+        stride = self.stride//4
         pts_len = np.zeros((self.pts.shape[0], 1))
         for i in range(self.pts.shape[0]):
             h = self.pts[i,2] - self.pts[i,0]
@@ -82,7 +82,7 @@ class LandslideTrainDataset(Dataset):
                 n_index = index-self.data_len if pts_idx==0 else index-(self.data_len+int(np.sum(self.pts_len[:pts_idx])))
                 dataset = g[str(pts_idx)]['data']
                 gt = g[str(pts_idx)]['gt']
-                return self.get_item(n_index, dataset, gt, self.stride//10)
+                return self.get_item(n_index, dataset, gt, self.stride//4)
 
 class LandslideDataset(Dataset):
     '''
