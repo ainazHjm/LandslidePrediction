@@ -65,7 +65,7 @@ def train(args, train_loader, test_loader):
     print("model is initialized ...")
 
     optimizer = to.Adam(train_model.parameters(), lr = args.lr, weight_decay = args.decay)
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=5)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=args.patience)
     # criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([20]).cuda())
     criterion = nn.BCEWithLogitsLoss()
 
