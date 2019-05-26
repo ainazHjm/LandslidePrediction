@@ -87,14 +87,14 @@ def train(args, train_loader, test_loader):
             loss.backward()
             optimizer.step()
 
-            writer.add_scalar("loss/train_iter", loss.item(), epoch*len(train_loader.dataset)+batch_idx)
+            writer.add_scalar("loss/train_iter", loss.item(), epoch*len(train_loader_iter)+batch_idx+1)
             writer.add_scalars(
                 "probRange",
                 {'min': th.min(sig(prds)), 'max': th.max(sig(prds))},
-                epoch*len(train_loader.dataset)+batch_idx
+                epoch*len(train_loader_iter)+batch_idx+1
             )
-            if (epoch*len(train_loader.dataset)+batch_idx+1) % 100 == 0:
-                writer.add_scalar("loss/train_100", loss_100/100, epoch*len(train_loader.dataset)+batch_idx)
+            if (epoch*len(train_loader_iter)+batch_idx+1) % 100 == 0:
+                writer.add_scalar("loss/train_100", loss_100/100, epoch*len(train_loader_iter)+batch_idx+1)
                 # print("%d,%d >> loss: %f" % (epoch, batch_idx, loss_100/100))
                 loss_100 = 0
     
