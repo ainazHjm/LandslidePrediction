@@ -37,12 +37,12 @@ def validate_on_ones(args, model, testData):
     samples = np.random.choice(indices, num_samples)
     for i in range(num_samples):
         d = testData[samples[i]]['data']
-        prds = sig(model.forward(d.view(1, 1, args.ws+2*args.pad, args.ws+2*args.pad).cuda()))[:, :, args.pad:-args.pad, args.pad:-args.pad]
+        prds = sig(model.forward(d.view(1, args.feature_num, args.ws+2*args.pad, args.ws+2*args.pad).cuda()))[0, 0, args.pad:-args.pad, args.pad:-args.pad]
         print(prds.shape)
-        plt.subplot(num_samples, 2, i*4)
+        plt.subplot(num_samples, 2, i*2+1)
         plt.imshow(prds.cpu().data.numpy())
-        plt.subplot(num_samples, 2, i*4+1)
-        plt.imshow(testData[samples[i]]['gt'].data.numpy())
+        plt.subplot(num_samples, 2, (i+1)*2)
+        plt.imshow(testData[samples[i]]['gt'][0, :, :].data.numpy())
     plt.show()
 
 # def save_results(args, model, idx):
