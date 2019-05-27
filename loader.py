@@ -65,7 +65,8 @@ class LandslideTrainDataset(Dataset):
                     row*stride:row*stride+self.ws,
                     col*stride:col*stride+self.ws
                 ]
-            )
+            ),
+            'index': (row, col)
         }
         return sample
 
@@ -126,7 +127,8 @@ class LandslideDataset(Dataset):
                         row*self.ws:(row+1)*self.ws,
                         col*self.ws:(col+1)*self.ws
                     ]
-                )
+                ),
+                'index': (row, col)
             }
             return sample
         
