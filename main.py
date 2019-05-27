@@ -3,8 +3,8 @@ import train
 import argparse
 import torch as th
 import numpy as np
+import utils.plot as up
 from utils.args import str2bool, __range
-from utils.plot import save_results
 from loader import LandslideDataset, LandslideTrainDataset, create_oversample_data
 from torch.utils.data import DataLoader
 
@@ -38,33 +38,16 @@ def get_args():
     parser.add_argument("--save_res_to", type=str, default='../output/CNN/')
     parser.add_argument("--oversample", type=str2bool, default=False)
     parser.add_argument("--patience", type=int, default=2)
+    parser.add_argument("--random_sample", type=str2bool, default=True)
     return parser.parse_args()
 
 def main():
     args = get_args()
-    args.oversample_pts = np.asarray(args.oversample_pts).reshape(-1, 4)
-    oversample_path = create_oversample_data(args)
-    trainData = LandslideTrainDataset(
-        args.data_path,
-        args.region,
-        args.stride,
-        args.ws,
-        args.oversample_pts,
-        oversample_path,
-        args.pad,
-        args.feature_num,
-    )
     testData = LandslideDataset(
         args.data_path,
         args.region,
         args.ws,
         args.pad
-    )
-    train_loader = DataLoader(
-        trainData,
-        batch_size=args.batch_size,
-        shuffle=True,
-        num_workers=args.num_workers
     )
     test_loader = DataLoader(
         testData,
@@ -76,12 +59,29 @@ def main():
     if args.validate:
         print("loading a trained model...", end='\r')
         model = th.load(args.load_model)
-        print("validating the model on validation data ...", end='\r')
-        save_results(args, model, 'validation')
-        print("validating the model on training data ...", end='\r')
-        save_results(args, model, 'train')
-        print("model is validated and the results are saved.")      
+        if args.random_sample:
+            up.validate_on_ones(args, model, testData)
+        else:
+            up.validate_all(args, model, test_loader)
     else:
+        args.oversample_pts = np.asarray(args.oversample_pts).reshape(-1, 4)
+        oversample_path = create_oversample_data(args)
+        trainData = LandslideTrainDataset(
+            args.data_path,
+            args.region,
+            args.stride,
+            args.ws,
+            args.oversample_pts,
+            oversample_path,
+            args.pad,
+            args.feature_num,
+        )
+        train_loader = DataLoader(
+            trainData,
+            batch_size=args.batch_size,
+            shuffle=True,
+            num_workers=args.num_workers
+        )
         print("starting to train ...")
         train.train(args, train_loader, test_loader)
 

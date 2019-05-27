@@ -8,48 +8,70 @@ from time import ctime
 from PIL import Image
 from torchvision.utils import save_image
 
-def data_loader(args, fname, feature_num=21):
-    dp = args.data_path
-    data_dir = 'data_'+str(args.pad*2)+'/'
-    # label_dir = 'gt_200/'
-    data = []
-    names = []
-    for name in fname:
-        features = []
-        for i in range(feature_num):
-           features.append(np.load(dp+data_dir+str(i)+'_'+name))
-        features = np.asarray(features)
-        data.append(features)
-        names.append(name)
-    return np.asarray(data), np.asarray(names) #4d shape
-
-def save_results(args, model, idx):
-    dir_name = args.save_res_to + args.region + '/' + args.load_model.split('/')[-1].split('.')[0]
-    if not os.path.exists(dir_name):
-        os.mkdir(dir_name)
-    
-    data_idx = np.load(args.data_path+'tdIdx.npy') if idx == 'train' else np.load(args.data_path+'vdIdx.npy')
-    num_iters = (data_idx.shape[0])//args.batch_size
+def validate_all(args, model, test_loader):
     sig = Sigmoid()
+    if not os.path.exists(args.save_res_to+args.load_model.split('/')[-1]):
+        os.mkdir(args.save_res_to+args.load_model.split('/')[-1])
+    save_to = args.save_res_to + args.load_model.split('/')[-1] + '/'
+    test_loader_iter = iter(test_loader)
+    for _ in range(len(test_loader_iter)):
+        batch_sample = test_loader_iter.next()
+        prds = sig(model.forward(batch_sample['data'].cuda()))[:, :, args.pad:-args.pad, args.pad:-args.pad]
+        for num in range(prds.shape[0]):
+            (row, col) = batch_sample['index'][num]
+            np.save(save_to+str(row)+'_'+str(col)+'.npy', prds[num, :, :, :].cpu().data.numpy())
 
-    for i in range(num_iters):
-        in_d, names = data_loader(args, data_idx[i*args.batch_size:(i+1)*args.batch_size])
-        in_d = th.tensor(in_d)
-        ignore = 1 - ((in_d[:, 0, :, :]==1) + (in_d[:, 0, :, :]==0))
-        prds = sig(model.forward(in_d.cuda()))
-        del in_d
-        prds[ignore.unsqueeze(1)] = 0
-        for j in range(prds.shape[0]):
-            np.save(dir_name+'/'+names[j], prds[j, 0, args.pad:-args.pad, args.pad:-args.pad].cpu().data.numpy())
-    del prds
-    in_d, names = data_loader(args, data_idx[-data_idx.shape[0]+num_iters*args.batch_size:])
-    in_d = th.tensor(in_d)
-    ignore = 1 - ((in_d[:, 0, :, :]==1) + (in_d[:, 0, :, :]==0))
-    prds = sig(model.forward(in_d.cuda()))
-    del in_d
-    prds[ignore.unsqueeze(1)] = 0
-    for i in range(prds.shape[0]):
-        np.save(dir_name+'/'+names[i], prds[i, 0, args.pad:-args.pad, args.pad:-args.pad].cpu().data.numpy())
+def find_positives(testData):
+    indices = []
+    for i in range(len(testData)):
+        if th.sum(testData[i]['gt'].cuda()) > 0:
+            indices.append(i)
+    return indices
+
+def validate_on_ones(args, model, testData):
+    import matplotlib.pyplot as plt
+    sig = Sigmoid()
+    indices = find_positives(testData)
+    print('found positive indices.')
+    num_samples = 4
+    samples = np.random.choice(indices, num_samples)
+    for i in range(num_samples):
+        d = testData[samples[i]]['data']
+        prds = sig(model.forward(d.view(1, 1, args.ws+2*args.pad, args.ws+2*args.pad).cuda()))[:, :, args.pad:-args.pad, args.pad:-args.pad]
+        print(prds.shape)
+        plt.subplot(num_samples, 2, i*4)
+        plt.imshow(prds.cpu().data.numpy())
+        plt.subplot(num_samples, 2, i*4+1)
+        plt.imshow(testData[samples[i]]['gt'].data.numpy())
+    plt.show()
+
+# def save_results(args, model, idx):
+#     dir_name = args.save_res_to + args.region + '/' + args.load_model.split('/')[-1].split('.')[0]
+#     if not os.path.exists(dir_name):
+#         os.mkdir(dir_name)
+    
+#     data_idx = np.load(args.data_path+'tdIdx.npy') if idx == 'train' else np.load(args.data_path+'vdIdx.npy')
+#     num_iters = (data_idx.shape[0])//args.batch_size
+#     sig = Sigmoid()
+
+#     for i in range(num_iters):
+#         in_d, names = data_loader(args, data_idx[i*args.batch_size:(i+1)*args.batch_size])
+#         in_d = th.tensor(in_d)
+#         ignore = 1 - ((in_d[:, 0, :, :]==1) + (in_d[:, 0, :, :]==0))
+#         prds = sig(model.forward(in_d.cuda()))
+#         del in_d
+#         prds[ignore.unsqueeze(1)] = 0
+#         for j in range(prds.shape[0]):
+#             np.save(dir_name+'/'+names[j], prds[j, 0, args.pad:-args.pad, args.pad:-args.pad].cpu().data.numpy())
+#     del prds
+#     in_d, names = data_loader(args, data_idx[-data_idx.shape[0]+num_iters*args.batch_size:])
+#     in_d = th.tensor(in_d)
+#     ignore = 1 - ((in_d[:, 0, :, :]==1) + (in_d[:, 0, :, :]==0))
+#     prds = sig(model.forward(in_d.cuda()))
+#     del in_d
+#     prds[ignore.unsqueeze(1)] = 0
+#     for i in range(prds.shape[0]):
+#         np.save(dir_name+'/'+names[i], prds[i, 0, args.pad:-args.pad, args.pad:-args.pad].cpu().data.numpy())
 
 def unite_imgs(data_path, orig_shape, ws):
     (h, w) = orig_shape
