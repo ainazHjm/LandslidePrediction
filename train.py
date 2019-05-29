@@ -12,19 +12,39 @@ from sklearn.utils import shuffle
 from utils.plot import save_config
 # pylint: disable=E1101,E0401,E1123
 
-# def load_data(args, fname, feature_num=21):
-#     dp = args.data_path
-#     data = []
-#     label = []
-#     for name in fname:
-#         features = []
-#         for i in range(feature_num):
-#             features.append(np.load(dp+str(i)+'/'+name)) # 2d shape
-#         features = np.asarray(features)
-#         data.append(features)
-#         gt = np.load(dp+'gt/'+name)
-#         label.append(gt.reshape((1, 200, 200)))
-#     return np.asarray(data), np.asarray(label) #4d
+def find_greater_slope(args, data, distance):
+    (_, h, w) = data.shape
+    center = (h//2, w//2)
+    pix_distance = distance//args.pix_res
+    if data[0, center[0], center[1]] < data[0, center[0]+pix_distance, center[1]] or data[0, center[0], center[1]] < data[0, center[0]-pix_distance, center[1]]:
+        return True
+    return False
+
+def find_direction(args, batch):
+    import scipy.ndimage as snd
+    angle = np.arange(45, 360, 45)
+    best_angles = []
+    for i in range(batch['data'].shape[0]):
+        best_theta = -1
+        for theta in angle:
+            rot_img = snd.rotate(batch['data'][i].numpy(), theta, reshape=True)
+            if find_greater_slope(args, rot_img, 320):
+                best_theta = theta
+                break
+        if best_theta!=-1:
+            best_angles.append(best_theta)
+        else:
+            best_angles.append(0)
+    return best_angles
+
+def process_batch(args, batch):
+    import scipy.ndimage as snd
+    angles = find_direction(args, batch)
+    for idx, e in enumerate(angles):
+        if e != 0:
+            batch['data'][idx] = snd.rotate(batch['data'][idx].numpy(), e, reshape=False)
+            batch['gt'][idx] = snd.rotate(batch['gt'][idx].numpy(), e, reshape=True)
+    return batch
 
 def validate(args, model, test_loader):
     with th.no_grad():
@@ -75,6 +95,7 @@ def train(args, train_loader, test_loader):
         for batch_idx in range(len(train_loader_iter)):
             optimizer.zero_grad()
             batch_sample = train_loader_iter.next()
+            batch_sample = process_batch(args, batch_sample)
             # import ipdb; ipdb.set_trace()
             prds = train_model.forward(batch_sample['data'].cuda())
             loss = criterion(
