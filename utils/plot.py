@@ -10,16 +10,16 @@ from torchvision.utils import save_image
 
 def validate_all(args, model, test_loader):
     sig = Sigmoid()
-    if not os.path.exists(args.save_res_to+args.load_model.split('/')[-1]):
-        os.mkdir(args.save_res_to+args.load_model.split('/')[-1])
-    save_to = args.save_res_to + args.load_model.split('/')[-1] + '/'
+    if not os.path.exists(args.save_res_to+args.region+'/'+args.load_model.split('/')[-1].split('.')[0]):
+        os.mkdir(args.save_res_to+args.region+'/'+args.load_model.split('/')[-1].split('.')[0])
+    save_to = args.save_res_to+args.region+'/'+args.load_model.split('/')[-1].split('.')[0]+'/'
     test_loader_iter = iter(test_loader)
     for _ in range(len(test_loader_iter)):
         batch_sample = test_loader_iter.next()
         prds = sig(model.forward(batch_sample['data'].cuda()))[:, :, args.pad:-args.pad, args.pad:-args.pad]
         for num in range(prds.shape[0]):
-            (row, col) = batch_sample['index'][num]
-            np.save(save_to+str(row)+'_'+str(col)+'.npy', prds[num, :, :, :].cpu().data.numpy())
+            rows, cols = batch_sample['index'][0], batch_sample['index'][1]
+            np.save(save_to+str(rows[num].item())+'_'+str(cols[num].item())+'.npy', prds[num, :, :, :].cpu().data.numpy())
 
 def find_positives(testData):
     indices = []
@@ -31,8 +31,14 @@ def find_positives(testData):
 def validate_on_ones(args, model, testData):
     import matplotlib.pyplot as plt
     sig = Sigmoid()
-    indices = find_positives(testData)
-    print('found positive indices.')
+    if args.pos_indices:
+        indices = np.load(args.pos_indices)
+        print('loaded positive indices.')
+    else:
+        indices = find_positives(testData)
+        print('found positive indices.')
+        np.save(('/').join(args.data_path.split('/')[:-1])+'/pos_indices.npy', np.array(indices))
+        print('wrote pos_indices')
     num_samples = 4
     samples = np.random.choice(indices, num_samples)
     for i in range(num_samples):
@@ -117,3 +123,4 @@ def save_config(path, args):
     with open(path, 'w') as f:
         for key in args.__dict__.keys():
             f.write(str(key)+': '+str(args.__dict__[key]))
+            f.write('\n')

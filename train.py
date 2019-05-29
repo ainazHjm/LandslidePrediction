@@ -28,8 +28,8 @@ from utils.plot import save_config
 
 def validate(args, model, test_loader):
     with th.no_grad():
-        # criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([20]).cuda())
-        criterion = nn.BCEWithLogitsLoss()
+        criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([20]).cuda())
+        # criterion = nn.BCEWithLogitsLoss()
         running_loss = 0
         test_loader_iter = iter(test_loader)
         for _ in range(len(test_loader_iter)):
@@ -59,15 +59,15 @@ def train(args, train_loader, test_loader):
     if not os.path.exists(dir_name):
         os.mkdir(dir_name)
     
-    train_model = model.FCN().cuda() if args.model == "FCN" else model.FCNwPool((args.feature_num, args.ws+2*args.pad, args.ws+2*args.pad), args.pix_res).cuda()
+    train_model = model.FCN((args.feature_num, args.ws+args.pad*2, args.ws+args.pad*2)).cuda() if args.model == "FCN" else model.FCNwPool((args.feature_num, args.ws+2*args.pad, args.ws+2*args.pad), args.pix_res).cuda()
     if args.load_model:
         train_model.load_state_dict(th.load(args.load_model).state_dict())
     print("model is initialized ...")
 
     optimizer = to.Adam(train_model.parameters(), lr = args.lr, weight_decay = args.decay)
     scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=args.patience)
-    # criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([20]).cuda())
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([20]).cuda())
+    # criterion = nn.BCEWithLogitsLoss()
 
     loss_100 = 0
     for epoch in range(args.n_epochs):

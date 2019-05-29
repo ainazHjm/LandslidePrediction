@@ -4,10 +4,10 @@ import torch as th
 import torch.nn.functional as F
 
 class FCN(nn.Module):
-    def __init__(self):
+    def __init__(self, shape):
         super(FCN, self).__init__()
         self.net = nn.Sequential(
-            nn.ConvTranspose2d(4, 4, kernel_size = (5,5), stride=(1,1)),
+            nn.ConvTranspose2d(shape[0], 4, kernel_size = (5,5), stride=(1,1)),
             nn.ReLU(),
             nn.Conv2d(4, 8, kernel_size=(3,3), stride=(1,1)),
             nn.ReLU(),
