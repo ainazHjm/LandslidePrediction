@@ -91,24 +91,25 @@ class LandslideDataset(Dataset):
     When testing, we don't need to have stride smaller than ws.
     Also, we don't need to oversample.
     '''
-    def __init__(self, path, region, ws, pad=64):
+    def __init__(self, path, region, ws, data_flag, pad=64):
         super(LandslideDataset, self).__init__()
         self.path = path
         self.ws = ws
         self.region = region
         self.pad = pad
+        self.data_flag = data_flag
 
     def __len__(self):
         with h5py.File(self.path, 'r') as f:
-            (_, h, w) = f[self.region]['test']['gt'].shape
+            (_, h, w) = f[self.region][self.data_flag]['gt'].shape
             hnum = h//self.ws
             wnum = w//self.ws
             return hnum*wnum
     
     def __getitem__(self, index):
         with h5py.File(self.path, 'r') as f:
-            dataset = f[self.region]['test']['data']
-            gt = f[self.region]['test']['gt']
+            dataset = f[self.region][self.data_flag]['data']
+            gt = f[self.region][self.data_flag]['gt']
             (_, _, wlen) = gt.shape
             wnum = wlen//self.ws
             row = index//wnum

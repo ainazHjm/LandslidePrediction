@@ -39,6 +39,7 @@ def get_args():
     parser.add_argument("--oversample", type=str2bool, default=False)
     parser.add_argument("--patience", type=int, default=2)
     parser.add_argument("--random_sample", type=str2bool, default=True)
+    parser.add_argument("--pos_indices", type=str, default='')
     return parser.parse_args()
 
 def main():
@@ -47,6 +48,7 @@ def main():
         args.data_path,
         args.region,
         args.ws,
+        'test',
         args.pad
     )
     test_loader = DataLoader(
@@ -64,18 +66,28 @@ def main():
         else:
             up.validate_all(args, model, test_loader)
     else:
-        args.oversample_pts = np.asarray(args.oversample_pts).reshape(-1, 4)
-        oversample_path = create_oversample_data(args)
-        trainData = LandslideTrainDataset(
-            args.data_path,
-            args.region,
-            args.stride,
-            args.ws,
-            args.oversample_pts,
-            oversample_path,
-            args.pad,
-            args.feature_num,
-        )
+        if args.oversample_pts:
+            args.oversample_pts = np.asarray(args.oversample_pts).reshape(-1, 4)
+            oversample_path = create_oversample_data(args)
+            trainData = LandslideTrainDataset(
+                args.data_path,
+                args.region,
+                args.stride,
+                args.ws,
+                args.oversample_pts,
+                oversample_path,
+                args.pad,
+                args.feature_num,
+            )
+        else:
+            trainData = LandslideDataset(
+                args.data_path,
+                args.region,
+                args.ws,
+                'train',
+                args.pad
+            )
+            print('train data created without oversampling.')
         train_loader = DataLoader(
             trainData,
             batch_size=args.batch_size,
