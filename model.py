@@ -104,6 +104,7 @@ class FCNwPool(nn.Module):
         self.u4 = nn.ConvTranspose2d(128, 1, kernel_size=(5,5), stride=(1,1), padding=(2,2))
 
         self.last = nn.Conv2d(20, 1, kernel_size=(1,1), stride=(1,1))
+        # self.last = nn.Conv2d(4, 1, kernel_size=(1,1), stride=(1,1))
 
     def create_mask(self, padding):
         kernel = th.zeros(5, 1, 2*padding+1, 2*padding+1)
@@ -172,5 +173,6 @@ class FCNwPool(nn.Module):
         #print("out shape:")
         # print(out.shape)
         fx = self.last(self.get_neighbors(out, self.pixel_res))
+        # fx = self.last(out)
         # print(fx.shape)
         return fx

@@ -42,8 +42,9 @@ def process_batch(args, batch):
     angles = find_direction(args, batch)
     for idx, e in enumerate(angles):
         if e != 0:
-            batch['data'][idx] = snd.rotate(batch['data'][idx].numpy(), e, reshape=False)
-            batch['gt'][idx] = snd.rotate(batch['gt'][idx].numpy(), e, reshape=True)
+            batch['data'][idx] = th.FloatTensor(snd.rotate(batch['data'][idx].numpy(), e, reshape=False))
+            batch['gt'][idx] = th.LongTensor(snd.rotate(batch['gt'][idx].numpy(), e, reshape=False))
+        # import ipdb; ipdb.set_trace()
     return batch
 
 def validate(args, model, test_loader):
