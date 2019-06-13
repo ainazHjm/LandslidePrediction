@@ -18,8 +18,14 @@ def validate_all(args, model, test_loader):
         batch_sample = test_loader_iter.next()
         prds = sig(model.forward(batch_sample['data'].cuda()))[:, :, args.pad:-args.pad, args.pad:-args.pad]
         for num in range(prds.shape[0]):
+            ignore = batch_sample['data'][num, 45, args.pad:-args.pad, args.pad:-args.pad] < 0
             rows, cols = batch_sample['index'][0], batch_sample['index'][1]
-            np.save(save_to+str(rows[num].item())+'_'+str(cols[num].item())+'.npy', prds[num, :, :, :].cpu().data.numpy())
+            res = prds[num, 0, :, :]
+            res[ignore] = 0
+            np.save(
+                save_to+str(rows[num].item())+'_'+str(cols[num].item())+'.npy',
+                res.cpu().data.numpy()
+            )
 
 def find_positives(testData):
     indices = []
