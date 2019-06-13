@@ -58,42 +58,43 @@ def main():
         num_workers=args.num_workers
     )
     # import ipdb; ipdb.set_trace()
+    if args.oversample_pts:
+        args.oversample_pts = np.asarray(args.oversample_pts).reshape(-1, 4)
+        oversample_path = create_oversample_data(args)
+        trainData = LandslideTrainDataset(
+            args.data_path,
+            args.region,
+            args.stride,
+            args.ws,
+            args.oversample_pts,
+            oversample_path,
+            args.pad,
+            args.feature_num,
+        )
+    else:
+        trainData = LandslideDataset(
+            args.data_path,
+            args.region,
+            args.ws,
+            'train',
+            args.pad
+        )
+        print('train data created without oversampling.')
+    train_loader = DataLoader(
+        trainData,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=args.num_workers
+    )
     if args.validate:
         print("loading a trained model...", end='\r')
         model = th.load(args.load_model)
         if args.random_sample:
             up.validate_on_ones(args, model, testData)
         else:
-            up.validate_all(args, model, test_loader)
+            # up.validate_all(args, model, test_loader)
+            up.validate_all(args, model, train_loader)
     else:
-        if args.oversample_pts:
-            args.oversample_pts = np.asarray(args.oversample_pts).reshape(-1, 4)
-            oversample_path = create_oversample_data(args)
-            trainData = LandslideTrainDataset(
-                args.data_path,
-                args.region,
-                args.stride,
-                args.ws,
-                args.oversample_pts,
-                oversample_path,
-                args.pad,
-                args.feature_num,
-            )
-        else:
-            trainData = LandslideDataset(
-                args.data_path,
-                args.region,
-                args.ws,
-                'train',
-                args.pad
-            )
-            print('train data created without oversampling.')
-        train_loader = DataLoader(
-            trainData,
-            batch_size=args.batch_size,
-            shuffle=True,
-            num_workers=args.num_workers
-        )
         print("starting to train ...")
         train.train(args, train_loader, test_loader)
 

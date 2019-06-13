@@ -106,15 +106,14 @@ def process_data():
                     t = normalize(t, 'slope')
                 elif data_dict[n_] == args.feature_num-1:
                     t = normalize(t, 'DEM')
-                else:
-                    # t = convert_nodata(zero_one(t))
-                    t = zero_one(t)
+                # else:
+                #     # t = convert_nodata(zero_one(t))
+                #     t = zero_one(t)
                 print(data_dict[n_])
                 hlen = t.shape[0]//5
                 f[name+'/train/data'][int(data_dict[n_])] = np.pad(np.concatenate((t[0:hlen, :], t[2*hlen:, :]), 0), args.pad, 'constant')
                 f[name+'/test/data'][int(data_dict[n_])] = np.pad(t[hlen:2*hlen, :], args.pad, 'constant')
         gt = np.array(Image.open(data_path+'gt'+args.data_format))
-        gt = zero_one(gt)
         hlen = gt.shape[0]//5
         f[name+'/train/gt'][0] = np.concatenate((gt[0:hlen, :], gt[2*hlen:, :]), 0)
         f[name+'/test/gt'][0] = gt[hlen:2*hlen, :]
