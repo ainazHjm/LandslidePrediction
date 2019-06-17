@@ -3,6 +3,7 @@ runs*/
 other_runs/
 .vscode/
 nohup.out
+slurm-*
 *.jpg
 *.tif
 
