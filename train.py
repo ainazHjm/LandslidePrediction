@@ -8,7 +8,7 @@ from time import ctime
 from tensorboardX import SummaryWriter
 from torchvision.utils import save_image
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from sklearn.utils import shuffle
+# from sklearn.utils import shuffle
 from utils.plot import save_config
 # pylint: disable=E1101,E0401,E1123
 
@@ -36,9 +36,10 @@ def validate(args, model, test_loader):
         for _ in range(len(test_loader_iter)):
             batch_sample = test_loader_iter.next()
             ret, data, gt, ignore = filter_batch(batch_sample)
+            ignore_idx += ignore
             if ret < 0:
                 continue
-            ignore_idx += ignore    
+            #ignore_idx += ignore    
             prds = model.forward(data.cuda())
             loss = criterion(
                 prds[:, :, args.pad:-args.pad, args.pad:-args.pad].view(-1, 1, args.ws, args.ws),
@@ -72,7 +73,7 @@ def train(args, train_loader, test_loader):
     print("model is initialized ...")
 
     optimizer = to.Adam(train_model.parameters(), lr = args.lr, weight_decay = args.decay)
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=args.patience)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=args.patience, verbose=True)
     criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([20]).cuda())
     # criterion = nn.BCEWithLogitsLoss()
 
@@ -86,10 +87,10 @@ def train(args, train_loader, test_loader):
             batch_sample = train_loader_iter.next()
             ret, data, gt, ignore = filter_batch(batch_sample)
             del batch_sample
-            
+            ignore_idx += ignore
             if ret < 0:
                 continue
-            ignore_idx += ignore
+            # ignore_idx += ignore
             prds = train_model.forward(data.cuda())
             loss = criterion(
                 prds[:, :, args.pad:-args.pad, args.pad:-args.pad].view(-1, 1, args.ws, args.ws),
