@@ -67,7 +67,13 @@ def train(args, train_loader, test_loader):
     if not os.path.exists(dir_name):
         os.mkdir(dir_name)
     
-    train_model = model.FCN((args.feature_num, args.ws+args.pad*2, args.ws+args.pad*2)).cuda() if args.model == "FCN" else model.FCNwPool((args.feature_num, args.ws+2*args.pad, args.ws+2*args.pad), args.pix_res).cuda()
+    if args.model == "FCN":
+        train_model = model.FCN((args.feature_num, args.ws+args.pad*2, args.ws+args.pad*2)).cuda()
+    elif args.model == 'FCNwPool':
+        train_model = model.FCNwPool((args.feature_num, args.ws+2*args.pad, args.ws+2*args.pad), args.pix_res).cuda()
+    else:
+        train_model = model.UNET((args.feature_num, args.ws+2*args.pad, args.ws+2*args.pad)).cuda()
+    
     if args.load_model:
         train_model.load_state_dict(th.load(args.load_model).state_dict())
     print("model is initialized ...")

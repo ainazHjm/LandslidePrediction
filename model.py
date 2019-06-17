@@ -56,13 +56,61 @@ class FCNUpSample(nn.Module):
         self.net = nn.Sequential(
             nn.ConvTranspose2d(in_channel, out_channel, kernel_size=(5,5), stride=(1,1), padding=(2,2)),
             nn.ConvTranspose2d(out_channel, out_channel, kernel_size=(4,4), stride=(4,4)),
-        ) 
-        # self.net = nn.Sequential(
-        #     *[self.block for _ in range(n-1)],
-        #     nn.ConvTranspose2d(out_channel, out_channel, kernel_size=(5,5), stride=(1,1)),
-        # )
+        )
     def forward(self, x):
         return self.net(x)
+
+class UNETUpSample(nn.Module):
+    def __init__(self, in_channel, out_channel):
+        super(UNETUpSample, self).__init__()
+        self.net = nn.Sequential(
+            nn.ConvTranspose2d(in_channel//2, in_channel//2, kernel_size=(5,5), stride=(1,1), padding=(2,2)),
+            nn.ConvTranspose2d(in_channel//2, in_channel//2, kernel_size=(4,4), stride=(4,4)),
+        )
+        self.conv = nn.Sequential(
+            FCNBasicBlock(in_channel, out_channel),
+            FCNBasicBlock(out_channel, out_channel)
+        )
+    def pad(self, x, xt):
+        (_, _, h, w) = x.shape
+        (_, _, ht, wt) = xt.shape
+        hdif = ht - h
+        wdif = wt - w
+        x = F.pad(x, (wdif//2, wdif-wdif//2, hdif//2, hdif-hdif//2))
+        return x
+
+    def forward(self, xdown, xup):
+        u1 = self.pad(self.net(xdown), xup)
+        out = th.cat((u1, xup), 1) # along their c dimension
+        return self.conv(out)
+
+class UNET(nn.Module):
+    def __init__(self, shape):
+        super(UNET, self).__init__()
+        self.shape = shape
+        self.iconv = nn.Sequential(
+            FCNBasicBlock(shape[0], 32),
+            FCNBasicBlock(32, 64),
+        )
+        self.down1 = FCNDownSample(64, 128)
+        self.down2 = FCNDownSample(128, 256)
+        self.down3 = FCNDownSample(256, 256)
+        self.up1 = UNETUpSample(256*2, 128)
+        self.up2 = UNETUpSample(128*2, 64)
+        self.up3 = UNETUpSample(64*2, 32)
+        self.oconv = nn.Sequential(
+            FCNBasicBlock(32, 16),
+            FCNBasicBlock(16, 1)
+        )
+    def forward(self, x):
+        xi = self.iconv(x)
+        xd1 = self.down1(xi)
+        xd2 = self.down2(xd1)
+        xd3 = self.down3(xd2)
+        xu1 = self.up1(xd3, xd2)
+        xu2 = self.up2(xu1, xd1)
+        xu3 = self.up3(xu2, xi)
+        return self.oconv(xu3)
 
 class FCNwPool(nn.Module):
     '''
