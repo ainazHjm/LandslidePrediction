@@ -4,28 +4,20 @@ import torch as th
 import torch.optim as to
 import torch.nn as nn
 import os
+import torch.nn.functional as F
 from time import ctime
 from tensorboardX import SummaryWriter
 from torchvision.utils import save_image
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-# from sklearn.utils import shuffle
 from utils.plot import save_config
 # pylint: disable=E1101,E0401,E1123
 
 def filter_batch(batch_sample):
-    bs = batch_sample['data'].shape[0]
-    data, gt, ignore_idx = [], [], 0
-    for i in range(bs):    
-        ignore = batch_sample['data'][i, 45, :, :]<0 # feature 45 is the landcover_1
-        if th.sum(ignore) > 0:
-            ignore_idx += 1
-        else:
-            data.append(batch_sample['data'][i, :, :, :])
-            gt.append(batch_sample['gt'][i, :, :, :])
-    if not data: # the whole batch is ignored
-        return -1, data, gt, bs
-    else:
-        return 1, th.stack(data), th.stack(gt), ignore_idx
+    (b, c, h, w) = batch_sample['data'].shape
+    indices = (batch_sample['gt'] >= 0).view(-1, 1, 1, 1)
+    data = batch_sample['data'][indices.expand(b, c, h, w)].view(-1, c, h, w)
+    gt = batch_sample['gt'][indices.view(-1, 1)].view(-1, 1)
+    return data, gt, th.sum(indices)
 
 def validate(args, model, test_loader):
     with th.no_grad():
@@ -35,15 +27,16 @@ def validate(args, model, test_loader):
         ignore_idx, running_loss, cnt = 0, 0, 0
         for _ in range(len(test_loader_iter)):
             batch_sample = test_loader_iter.next()
-            ret, data, gt, ignore = filter_batch(batch_sample)
+            (_, _, h, w) = batch_sample['data'].shape
+            data, gt, ignore = filter_batch(batch_sample)
             ignore_idx += ignore
-            if ret < 0:
+            if data.nelement() == 0:
                 continue
-            #ignore_idx += ignore    
-            prds = model.forward(data.cuda())
+            data, gt = data.cuda(), gt.cuda()
+            prds = model.forward(data)
             loss = criterion(
-                prds[:, :, args.pad:-args.pad, args.pad:-args.pad].view(-1, 1, args.ws, args.ws),
-                gt.cuda())
+                prds[:, :, h//2, w//2].view(-1, 1),
+                gt)
             running_loss += loss.item()
             cnt += 1
         print('~~~ validating ~~~: %f percent of the data is ignored.' %(ignore_idx/(len(test_loader_iter)*args.batch_size)))
@@ -51,13 +44,8 @@ def validate(args, model, test_loader):
 
 def train(args, train_loader, test_loader):
     '''
-    Trains on a batch of patches of size (22, 200, 200).
-    TODO: 
-        1. try with patience = 1
-        2. find the correponding features names
-        3. train the model with higher penalty weight for postive samples (ratio1:1)
-        4. (*) train without batch normalization > not good
-        5. train the model without the penalty weight (ratio 0.02:100)
+    For the pixel wise prediction, the window size (ws) should be 1 and the padding size (pad) should be 32
+    so that the input to the model is 65x65.
     '''
     writer = SummaryWriter()
     sig = nn.Sigmoid()
@@ -70,9 +58,9 @@ def train(args, train_loader, test_loader):
     if args.model == "FCN":
         train_model = model.FCN((args.feature_num, args.ws+args.pad*2, args.ws+args.pad*2)).cuda()
     elif args.model == 'FCNwPool':
-        train_model = model.FCNwPool((args.feature_num, args.ws+2*args.pad, args.ws+2*args.pad), args.pix_res).cuda()
+        train_model = model.FCNwPool((args.feature_num, 1+2*args.pad, 1+2*args.pad), args.pix_res).cuda()
     else:
-        train_model = model.UNET((args.feature_num, args.ws+2*args.pad, args.ws+2*args.pad)).cuda()
+        train_model = model.UNET((args.feature_num, 1+2*args.pad, 1+2*args.pad)).cuda()
     
     if args.load_model:
         train_model.load_state_dict(th.load(args.load_model).state_dict())
@@ -82,7 +70,6 @@ def train(args, train_loader, test_loader):
     scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=args.patience, verbose=True)
     criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([20]).cuda())
     # criterion = nn.BCEWithLogitsLoss()
-
     loss_100, iter_cnt = 0, 0
     for epoch in range(args.n_epochs):
         running_loss = 0
@@ -91,18 +78,20 @@ def train(args, train_loader, test_loader):
         for _ in range(len(train_loader_iter)):
             optimizer.zero_grad()
             batch_sample = train_loader_iter.next()
-            ret, data, gt, ignore = filter_batch(batch_sample)
-            del batch_sample
+            (_, _, h, w) = batch_sample['data'].shape
+            data, gt, ignore = filter_batch(batch_sample)
+            # print('--- data: (%d, %d, %d , %d), gt: (%d, %d) ---' %(data.shape[0], data.shape[1], data.shape[2], data.shape[3], gt.shape[0], gt.shape[1]), end='\r')
             ignore_idx += ignore
-            if ret < 0:
+            if data.nelement() == 0:
                 continue
-            # ignore_idx += ignore
-            prds = train_model.forward(data.cuda())
+            del batch_sample
+            data, gt = data.cuda(), gt.cuda()
+            # import ipdb; ipdb.set_trace()
+            prds = train_model.forward(data)
             loss = criterion(
-                prds[:, :, args.pad:-args.pad, args.pad:-args.pad].view(-1, 1, args.ws, args.ws),
-                gt.cuda()
+                prds[:, :, h//2, w//2].view(-1, 1),
+                gt
                 )
-            
             running_loss += loss.item()
             loss_100 += loss.item()
             loss.backward()
@@ -119,7 +108,7 @@ def train(args, train_loader, test_loader):
                 loss_100 = 0
             iter_cnt += 1
             epoch_iters += 1
-            del prds, gt
+            del prds, gt, data
         print('--- epoch %d: %f percent of the data is ignored.' %(epoch, ignore_idx/(len(train_loader_iter)*args.batch_size)))
 
         if (epoch+1) % args.s == 0:

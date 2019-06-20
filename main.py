@@ -5,7 +5,7 @@ import torch as th
 import numpy as np
 import utils.plot as up
 from utils.args import str2bool, __range
-from loader import LandslideDataset, LandslideTrainDataset, create_oversample_data
+from loader import LandslideDataset, LandslideTrainDataset, create_oversample_data, PixDataset, SampledPixDataset
 from torch.utils.data import DataLoader
 
 def custom_collate_fn(batch):
@@ -40,63 +40,88 @@ def get_args():
     parser.add_argument("--patience", type=int, default=2)
     parser.add_argument("--random_sample", type=str2bool, default=True)
     parser.add_argument("--pos_indices", type=str, default='')
+    parser.add_argument("--sample_path", type=str, default='../image_data/')
     return parser.parse_args()
 
 def main():
     args = get_args()
-    testData = LandslideDataset(
-        args.data_path,
-        args.region,
-        args.ws,
-        'test',
-        args.pad
-    )
-    test_loader = DataLoader(
-        testData,
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=args.num_workers
-    )
-    # import ipdb; ipdb.set_trace()
-    if args.oversample_pts:
-        args.oversample_pts = np.asarray(args.oversample_pts).reshape(-1, 4)
-        oversample_path = create_oversample_data(args)
-        trainData = LandslideTrainDataset(
-            args.data_path,
-            args.region,
-            args.stride,
-            args.ws,
-            args.oversample_pts,
-            oversample_path,
-            args.pad,
-            args.feature_num,
-        )
-    else:
-        trainData = LandslideDataset(
-            args.data_path,
-            args.region,
-            args.ws,
-            'train',
-            args.pad
-        )
-        print('train data created without oversampling.')
-    train_loader = DataLoader(
-        trainData,
-        batch_size=args.batch_size,
-        shuffle=True,
-        num_workers=args.num_workers
-    )
+    # testData = LandslideDataset(
+    #     args.data_path,
+    #     args.region,
+    #     args.ws,
+    #     'test',
+    #     args.pad
+    # )
+    # test_loader = DataLoader(
+    #     testData,
+    #     batch_size=args.batch_size,
+    #     shuffle=False,
+    #     num_workers=args.num_workers
+    # )
+    # # import ipdb; ipdb.set_trace()
+    # if args.oversample_pts:
+    #     args.oversample_pts = np.asarray(args.oversample_pts).reshape(-1, 4)
+    #     oversample_path = create_oversample_data(args)
+    #     trainData = LandslideTrainDataset(
+    #         args.data_path,
+    #         args.region,
+    #         args.stride,
+    #         args.ws,
+    #         args.oversample_pts,
+    #         oversample_path,
+    #         args.pad,
+    #         args.feature_num,
+    #     )
+    # else:
+    #     trainData = LandslideDataset(
+    #         args.data_path,
+    #         args.region,
+    #         args.ws,
+    #         'train',
+    #         args.pad
+    #     )
+    #     print('train data created without oversampling.')
+    # train_loader = DataLoader(
+    #     trainData,
+    #     batch_size=args.batch_size,
+    #     shuffle=True,
+    #     num_workers=args.num_workers
+    # )
+    # ----------------------------------------------------------------------
+    testData = PixDataset(args.data_path, args.region, 'test', args.pad)
+    testLoader = DataLoader(testData, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
+    trainData = PixDataset(args.data_path, args.region, 'train', args.pad)
+    trainLoader = DataLoader(trainData, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+    # trainData = SampledPixDataset(
+    #     args.data_path,
+    #     args.sample_path+'train_data.npy',
+    #     args.region,
+    #     args.pad
+    # )
+    # trainLoader = DataLoader(trainData, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+    # partial_test = SampledPixDataset(
+    #     args.data_path,
+    #     args.sample_path+'test_data.npy',
+    #     args.region,
+    #     args.pad
+    # )
+    # partial_testLoader = DataLoader(partial_test, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
+    # print('created the dataloader with PixDataset ...')
     if args.validate:
         print("loading a trained model...", end='\r')
         model = th.load(args.load_model)
         if args.random_sample:
-            up.validate_on_ones(args, model, testData)
+            # up.validate_on_ones(args, model, partial_test)
+            up.validate_on_ones(args, model, testLoader)
         else:
-            # up.validate_all(args, model, test_loader)
-            up.validate_all(args, model, train_loader)
+            # whole_test = PixDataset(args.data_path, args.region, 'test', args.pad)
+            # loader = DataLoader(whole_test, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
+            # up.validate_all(args, model, loader)
+            up.validate_all(args, model, testLoader)
     else:
         print("starting to train ...")
-        train.train(args, train_loader, test_loader)
+        # train.train(args, trainLoader, partial_testLoader)
+        train.train(args, trainLoader, testLoader)
 
 if __name__ == "__main__":
     main()

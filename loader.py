@@ -85,6 +85,66 @@ class LandslideTrainDataset(Dataset):
                 gt = g[str(pts_idx)]['gt']
                 return self.get_item(n_index, dataset, gt, self.stride//4)
 
+class SampledPixDataset(Dataset):
+    def __init__(self, data_path, data_indices_path, region, pad=32):
+        super(SampledPixDataset, self).__init__()
+        self.data_path = data_path
+        self.indices = np.load(data_indices_path) # a nx2 array
+        self.region = region
+        self.pad = pad
+
+    def __len__(self):
+        return len(self.indices)
+
+    def __getitem__(self, index):
+        row, col = self.indices[index][0], self.indices[index][1]
+        with h5py.File(self.data_path, 'r') as f:
+            sample = {
+                'data': f[self.region]['train']['data'][:, row:row+2*self.pad+1, col:col+2*self.pad+1],
+                'gt': f[self.region]['train']['gt'][:, row, col],
+                'index': (row, col)
+            }
+            return sample
+
+class PixDataset(Dataset):
+    def __init__(self, path, region, data_flag, pad=32):
+        super(PixDataset, self).__init__()
+        self.path = path
+        self.region = region
+        self.pad = pad
+        self.data_flag = data_flag
+        self.shape = self.get_shape()
+    
+    def get_shape(self):
+        with h5py.File(self.path, 'r') as f:
+            (_, h, w) = f[self.region][self.data_flag]['gt'].shape
+            return (h,w)
+
+    def __len__(self):
+        with h5py.File(self.path, 'r') as f:
+            (_, h, w) = f[self.region][self.data_flag]['gt'].shape
+            return h*w
+
+    def __getitem__(self, index):
+        (_, w) = self.shape
+        row = index//w
+        col = index - (index//w)*w
+        with h5py.File(self.path, 'r') as f:
+            sample = {
+                'data': f[self.region][self.data_flag]['data'][
+                    :,
+                    row:row+2*self.pad+1,
+                    col:col+2*self.pad+1
+                ],
+                'gt': f[self.region][self.data_flag]['gt'][
+                    :,
+                    row,
+                    col
+                ],
+                'index': (row, col)
+            }
+            return sample
+
 class LandslideDataset(Dataset):
     '''
     This class doesn't support different stride sizes and oversampling.
