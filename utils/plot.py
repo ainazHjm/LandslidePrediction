@@ -8,25 +8,24 @@ from time import ctime
 from PIL import Image
 from torchvision.utils import save_image
 
-def validate_all(args, model, test_loader):
+def validate_all(args, model, test_loader, shape=(4201, 19250)):
     sig = Sigmoid()
     if not os.path.exists(args.save_res_to+args.region+'/'+args.load_model.split('/')[-1].split('.')[0]):
         os.mkdir(args.save_res_to+args.region+'/'+args.load_model.split('/')[-1].split('.')[0])
     save_to = args.save_res_to+args.region+'/'+args.load_model.split('/')[-1].split('.')[0]+'/'
+    res_img = np.zeros(shape)
     test_loader_iter = iter(test_loader)
     for _ in range(len(test_loader_iter)):
         batch_sample = test_loader_iter.next()
-        prds = sig(model.forward(batch_sample['data'].cuda()))[:, :, args.pad:-args.pad, args.pad:-args.pad]
+        (_, c, h, w) = batch_sample['data'].shape
+        indices = batch_sample['gt'] >= 0
+        data = batch_sample['data'][indices.expand(-1, c, h, w)].cuda()
+        prds = sig(model.forward(data))[:, :, h//2, w//2].view(-1, 1)
         for num in range(prds.shape[0]):
-            ignore = batch_sample['data'][num, 45, args.pad:-args.pad, args.pad:-args.pad] < 0
-            rows, cols = batch_sample['index'][0], batch_sample['index'][1]
-            res = prds[num, 0, :, :]
-            res[ignore] = 0
-            np.save(
-                save_to+str(rows[num].item())+'_'+str(cols[num].item())+'.npy',
-                res.cpu().data.numpy()
-            )
-
+            row, col = batch_sample['index'][num]
+            res_img[row, col] = prds[num]
+    np.save(save_to+'predictions.npy', res_img)
+            
 def find_positives(testData):
     indices = []
     for i in range(len(testData)):

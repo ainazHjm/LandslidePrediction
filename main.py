@@ -88,40 +88,40 @@ def main():
     #     num_workers=args.num_workers
     # )
     # ----------------------------------------------------------------------
-    testData = PixDataset(args.data_path, args.region, 'test', args.pad)
-    testLoader = DataLoader(testData, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
-    trainData = PixDataset(args.data_path, args.region, 'train', args.pad)
-    trainLoader = DataLoader(trainData, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
-    # trainData = SampledPixDataset(
-    #     args.data_path,
-    #     args.sample_path+'train_data.npy',
-    #     args.region,
-    #     args.pad
-    # )
+    # testData = PixDataset(args.data_path, args.region, 'test', args.pad)
+    # testLoader = DataLoader(testData, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
+    # trainData = PixDataset(args.data_path, args.region, 'train', args.pad)
     # trainLoader = DataLoader(trainData, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
-    # partial_test = SampledPixDataset(
-    #     args.data_path,
-    #     args.sample_path+'test_data.npy',
-    #     args.region,
-    #     args.pad
-    # )
-    # partial_testLoader = DataLoader(partial_test, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
-    # print('created the dataloader with PixDataset ...')
+    trainData = SampledPixDataset(
+        args.data_path,
+        args.sample_path+'train_data.npy',
+        args.region,
+        args.pad
+    )
+    trainLoader = DataLoader(trainData, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+    partial_test = SampledPixDataset(
+        args.data_path,
+        args.sample_path+'test_data.npy',
+        args.region,
+        args.pad
+    )
+    partial_testLoader = DataLoader(partial_test, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
+    print('created the dataloader with PixDataset ...')
     if args.validate:
         print("loading a trained model...", end='\r')
         model = th.load(args.load_model)
         if args.random_sample:
-            # up.validate_on_ones(args, model, partial_test)
-            up.validate_on_ones(args, model, testLoader)
+            up.validate_on_ones(args, model, partial_test)
+            # up.validate_on_ones(args, model, testLoader)
         else:
-            # whole_test = PixDataset(args.data_path, args.region, 'test', args.pad)
-            # loader = DataLoader(whole_test, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
-            # up.validate_all(args, model, loader)
-            up.validate_all(args, model, testLoader)
+            whole_test = PixDataset(args.data_path, args.region, 'test', args.pad)
+            loader = DataLoader(whole_test, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
+            up.validate_all(args, model, loader)
+            # up.validate_all(args, model, testLoader)
     else:
         print("starting to train ...")
-        # train.train(args, trainLoader, partial_testLoader)
-        train.train(args, trainLoader, testLoader)
+        train.train(args, trainLoader, partial_testLoader)
+        # train.train(args, trainLoader, testLoader)
 
 if __name__ == "__main__":
     main()
