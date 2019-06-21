@@ -8,10 +8,10 @@ from utils.args import str2bool, __range
 from loader import LandslideDataset, LandslideTrainDataset, create_oversample_data, PixDataset, SampledPixDataset
 from torch.utils.data import DataLoader
 
-def custom_collate_fn(batch):
-    in_data = th.stack([e['data'] for e in batch], 0)
-    label = th.stack([e['gt'] for e in batch], 0)
-    return {'data': in_data, 'gt': label}
+# def custom_collate_fn(batch):
+#     in_data = th.stack([e['data'] for e in batch], 0)
+#     label = th.stack([e['gt'] for e in batch], 0)
+#     return {'data': in_data, 'gt': label}
 
 def get_args():
     parser = argparse.ArgumentParser(description="Training a CNN-Classifier for landslide prediction")
@@ -45,53 +45,6 @@ def get_args():
 
 def main():
     args = get_args()
-    # testData = LandslideDataset(
-    #     args.data_path,
-    #     args.region,
-    #     args.ws,
-    #     'test',
-    #     args.pad
-    # )
-    # test_loader = DataLoader(
-    #     testData,
-    #     batch_size=args.batch_size,
-    #     shuffle=False,
-    #     num_workers=args.num_workers
-    # )
-    # # import ipdb; ipdb.set_trace()
-    # if args.oversample_pts:
-    #     args.oversample_pts = np.asarray(args.oversample_pts).reshape(-1, 4)
-    #     oversample_path = create_oversample_data(args)
-    #     trainData = LandslideTrainDataset(
-    #         args.data_path,
-    #         args.region,
-    #         args.stride,
-    #         args.ws,
-    #         args.oversample_pts,
-    #         oversample_path,
-    #         args.pad,
-    #         args.feature_num,
-    #     )
-    # else:
-    #     trainData = LandslideDataset(
-    #         args.data_path,
-    #         args.region,
-    #         args.ws,
-    #         'train',
-    #         args.pad
-    #     )
-    #     print('train data created without oversampling.')
-    # train_loader = DataLoader(
-    #     trainData,
-    #     batch_size=args.batch_size,
-    #     shuffle=True,
-    #     num_workers=args.num_workers
-    # )
-    # ----------------------------------------------------------------------
-    # testData = PixDataset(args.data_path, args.region, 'test', args.pad)
-    # testLoader = DataLoader(testData, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
-    # trainData = PixDataset(args.data_path, args.region, 'train', args.pad)
-    # trainLoader = DataLoader(trainData, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
     trainData = SampledPixDataset(
         args.data_path,
         args.sample_path+'train_data.npy',
