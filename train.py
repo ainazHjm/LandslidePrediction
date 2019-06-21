@@ -12,13 +12,6 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from utils.plot import save_config
 # pylint: disable=E1101,E0401,E1123
 
-# def filter_batch(batch_sample):
-#     (b, c, h, w) = batch_sample['data'].shape
-#     indices = (batch_sample['gt'] >= 0).view(-1, 1, 1, 1)
-#     data = batch_sample['data'][indices.expand(b, c, h, w)].view(-1, c, h, w)
-#     gt = batch_sample['gt'][indices.view(-1, 1)].view(-1, 1)
-#     return data, gt, th.sum(indices)
-
 def validate(args, model, test_loader):
     with th.no_grad():
         # criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([20]).cuda())
@@ -29,11 +22,6 @@ def validate(args, model, test_loader):
         for _ in range(len(test_loader_iter)):
             batch_sample = test_loader_iter.next()
             (_, _, h, w) = batch_sample['data'].shape
-            # data, gt, ignore = filter_batch(batch_sample)
-            # ignore_idx += ignore
-            # if data.nelement() == 0:
-            #     continue
-            # data, gt = data.cuda(), gt.cuda()
             data = batch_sample['data'].cuda()
             gt = batch_sample['gt'].cuda()
             prds = model.forward(data)
@@ -42,8 +30,7 @@ def validate(args, model, test_loader):
                 gt)
             running_loss += loss.item()
             cnt += 1
-        # print('~~~ validating ~~~: %f percent of the data is ignored.' %(ignore_idx/(len(test_loader_iter)*args.batch_size)))
-        return running_loss/cnt
+       return running_loss/cnt
 
 def train(args, train_loader, test_loader):
     '''
@@ -69,6 +56,9 @@ def train(args, train_loader, test_loader):
         train_model.load_state_dict(th.load(args.load_model).state_dict())
     print("model is initialized ...")
 
+    if th.cuda.device_count() > 1:
+        train_model = nn.DataParallel(train_model)
+    
     optimizer = to.Adam(train_model.parameters(), lr = args.lr, weight_decay = args.decay)
     scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=args.patience, verbose=True)
     # criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([20]).cuda())
@@ -83,14 +73,6 @@ def train(args, train_loader, test_loader):
             optimizer.zero_grad()
             batch_sample = train_loader_iter.next()
             (_, _, h, w) = batch_sample['data'].shape
-            # data, gt, ignore = filter_batch(batch_sample)
-            # print('--- data: (%d, %d, %d , %d), gt: (%d, %d) ---' %(data.shape[0], data.shape[1], data.shape[2], data.shape[3], gt.shape[0], gt.shape[1]), end='\r')
-            # ignore_idx += ignore
-            # if data.nelement() == 0:
-            #     continue
-            # del batch_sample
-            # data, gt = data.cuda(), gt.cuda()
-            # import ipdb; ipdb.set_trace()
             data = batch_sample['data'].cuda()
             gt = batch_sample['gt'].cuda()
             prds = train_model.forward(data)
@@ -115,7 +97,6 @@ def train(args, train_loader, test_loader):
             iter_cnt += 1
             epoch_iters += 1
             del prds, gt, data
-        # print('--- epoch %d: %f percent of the data is ignored.' %(epoch, ignore_idx/(len(train_loader_iter)*args.batch_size)))
 
         if (epoch+1) % args.s == 0:
             th.save(train_model, dir_name+'/'+str(epoch)+'_'+exe_time+'.pt')
