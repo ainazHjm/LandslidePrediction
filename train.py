@@ -30,7 +30,7 @@ def validate(args, model, test_loader):
                 gt)
             running_loss += loss.item()
             cnt += 1
-       return running_loss/cnt
+        return running_loss/cnt
 
 def train(args, train_loader, test_loader):
     '''
