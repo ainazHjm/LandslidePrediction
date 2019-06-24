@@ -41,6 +41,9 @@ def get_args():
     parser.add_argument("--random_sample", type=str2bool, default=True)
     parser.add_argument("--pos_indices", type=str, default='')
     parser.add_argument("--sample_path", type=str, default='../image_data/')
+    parser.add_argument('--join_data', type=str2bool, default=False)
+    parser.add_argument('--reduce_dim', type=str, default='NCA')
+    parser.add_argument('--visualize', type=str2bool, default=False)
     return parser.parse_args()
 
 def main():
