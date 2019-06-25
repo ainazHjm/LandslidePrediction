@@ -86,12 +86,13 @@ class LandslideTrainDataset(Dataset):
                 return self.get_item(n_index, dataset, gt, self.stride//4)
 
 class SampledPixDataset(Dataset):
-    def __init__(self, data_path, data_indices_path, region, pad=32):
+    def __init__(self, data_path, data_indices_path, region, pad, data_flag):
         super(SampledPixDataset, self).__init__()
         self.data_path = data_path
         self.indices = np.load(data_indices_path) # a nx2 array
         self.region = region
         self.pad = pad
+        self.data_flag = data_flag
 
     def __len__(self):
         return len(self.indices)
@@ -100,8 +101,8 @@ class SampledPixDataset(Dataset):
         row, col = self.indices[index][0], self.indices[index][1]
         with h5py.File(self.data_path, 'r') as f:
             sample = {
-                'data': f[self.region]['train']['data'][:, row:row+2*self.pad+1, col:col+2*self.pad+1],
-                'gt': f[self.region]['train']['gt'][:, row, col],
+                'data': f[self.region][self.data_flag]['data'][:, row:row+2*self.pad+1, col:col+2*self.pad+1],
+                'gt': f[self.region][self.data_flag]['gt'][:, row, col],
                 'index': (row, col)
             }
             return sample

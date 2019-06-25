@@ -28,6 +28,7 @@ def validate(args, model, test_loader):
             loss = criterion(
                 prds[:, :, h//2, w//2].view(-1, 1),
                 gt)
+            import ipdb; ipdb.set_trace()
             running_loss += loss.item()
             cnt += 1
         return running_loss/cnt

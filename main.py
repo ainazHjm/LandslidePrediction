@@ -52,14 +52,17 @@ def main():
         args.data_path,
         args.sample_path+'train_data.npy',
         args.region,
-        args.pad
+        args.pad,
+        'train',
     )
     trainLoader = DataLoader(trainData, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+    #import ipdb; ipdb.set_trace()
     partial_test = SampledPixDataset(
         args.data_path,
         args.sample_path+'test_data.npy',
         args.region,
-        args.pad
+        args.pad,
+        'test'
     )
     partial_testLoader = DataLoader(partial_test, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
     print('created the dataloader with PixDataset ...')
