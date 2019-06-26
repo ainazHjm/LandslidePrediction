@@ -1,8 +1,7 @@
 import h5py
 import numpy as np
 import scipy.ndimage as snd
-from time import ctime
-from main import get_args
+# from time import ctime
 from loader import LandslideDataset
 from sacred import Experiment
 
