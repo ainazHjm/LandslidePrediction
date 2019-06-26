@@ -4,48 +4,12 @@ import torch as th
 import torch.optim as to
 import torch.nn as nn
 import os
-import scipy.ndimage
 from time import ctime
 from tensorboardX import SummaryWriter
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from sklearn.utils import shuffle
 from utils.plot import save_config
 # pylint: disable=E1101,E0401,E1123
 
-# def find_greater_slope(args, data, distance):
-#     (_, h, w) = data.shape
-#     center = (h//2, w//2)
-#     pix_distance = distance//args.pix_res
-#     if data[0, center[0], center[1]] < data[0, center[0]+pix_distance, center[1]] or data[0, center[0], center[1]] < data[0, center[0]-pix_distance, center[1]]:
-#         return True
-#     return False
-
-# def find_direction(args, batch):
-#     import scipy.ndimage as snd
-#     angle = np.arange(45, 360, 45)
-#     best_angles = []
-#     for i in range(batch['data'].shape[0]):
-#         best_theta = -1
-#         for theta in angle:
-#             rot_img = snd.rotate(batch['data'][i].numpy(), theta, reshape=True)
-#             if find_greater_slope(args, rot_img, 320):
-#                 best_theta = theta
-#                 break
-#         if best_theta!=-1:
-#             best_angles.append(best_theta)
-#         else:
-#             best_angles.append(0)
-#     return best_angles
-
-# def process_batch(args, batch):
-#     import scipy.ndimage as snd
-#     angles = find_direction(args, batch)
-#     for idx, e in enumerate(angles):
-#         if e != 0:
-#             batch['data'][idx] = th.FloatTensor(snd.rotate(batch['data'][idx].numpy(), e, reshape=False))
-#             batch['gt'][idx] = th.LongTensor(snd.rotate(batch['gt'][idx].numpy(), e, reshape=False))
-#         # import ipdb; ipdb.set_trace()
-#     return batch
 def filter_batch(batch_sample):
     (b, _, h, w) = batch_sample['data'].shape
     data, gt, ignore = [], [], 0
