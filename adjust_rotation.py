@@ -1,7 +1,7 @@
 import h5py
 import numpy as np
 import scipy.ndimage as snd
-# from time import ctime
+from time import ctime
 from loader import LandslideDataset
 from sacred import Experiment
 
@@ -25,11 +25,13 @@ def init_dataset(args, num_samples):
             (num_samples, 1, args['ws'], args['ws']),
             compression='lzf'
         )
+    print('initialized the dataset.')
     return f
 
 def write_dataset_iter(args, f, sample, angle, idx, data_flag='train'):
     data = snd.rotate(sample['data'], angle, reshape=False) # TODO: check shape & type
     gt = snd.rotate(sample['gt'], angle, reshape=False)
+    # import ipdb; ipdb.set_trace()
     f[args['region']][data_flag]['data'][idx, :, :, :] = data
     f[args['region']][data_flag]['gt'][idx, :, :, :] = gt
     return f
@@ -43,6 +45,7 @@ def adjust_rot(args, dataset, data_flag):
         tailpt = (sample['data'][0, :, :] == hill).nonzero()[0].data.numpy()
         headpt = np.array([h//2, w//2])
         angle = find_angle(headpt, tailpt)
+        print('[%s][%d/%d] ---- angle: %f ---- ' %(ctime(), idx, len(dataset), angle))
         f = write_dataset_iter(args, f, sample, angle, idx, data_flag)
     f.close()
     print('created the rotated dataset for %s' %data_flag)
@@ -75,7 +78,7 @@ def ex_cfg():
         'ws': 200,
         'pad': 64,
         'num_feature': 94,
-        'save_to': '/home/ainaz/projects/Landslides/image_data/rotated_landslide.h5'
+        'save_to': '/home/ainaz/Projects/Landslides/image_data/rotated_landslide.h5'
     }
 
 @ex.automain
