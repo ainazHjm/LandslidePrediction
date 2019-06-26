@@ -2,15 +2,9 @@ import h5py
 import numpy as np
 import scipy.ndimage as snd
 from time import ctime
-
-# def find_hill(args, data, distance):
-#     look = distance//args.pix_res
-#     (h, w) = data.shape
-#     slope = data[h//2, w//2] # look at slope at the center pixel
-#     if data[h//2-look, w//2] > slope or data[h//2+look, w//2] > slope:
-#         return 1
-#     else:
-#         return 0
+from main import get_args
+from loader import LandslideDataset
+from sacred import Experiment
 
 def rad2deg(theta):
     return (theta*180)/np.pi
@@ -19,8 +13,30 @@ def find_angle(pc, pr):
     theta = np.arctan2(abs(pr[0]-pc[0]), abs(pr[1]-pc[1]))
     return rad2deg(theta)
 
-def adjust_rot(args, dataset, flag='train'):
-    rotations = np.zeros((len(dataset), 3)) # the first two are row and col and the last one is angle
+def init_dataset(args, num_samples):
+    f = h5py.File(args['save_to'], 'w')
+    for flag in ['train', 'test']:
+        f.create_dataset(
+            args['region']+'/'+flag+'/data',
+            (num_samples, args['num_feature'], args['ws']+args['pad']*2, args['ws']+args['pad']*2),
+            compression='lzf'
+        )
+        f.create_dataset(
+            args['region']+'/'+flag+'/gt',
+            (num_samples, 1, args['ws'], args['ws']),
+            compression='lzf'
+        )
+    return f
+
+def write_dataset_iter(args, f, sample, angle, idx, data_flag='train'):
+    data = snd.rotate(sample['data'], angle, reshape=False) # TODO: check shape & type
+    gt = snd.rotate(sample['gt'], angle, reshape=False)
+    f[args['region']][data_flag]['data'][idx, :, :, :] = data
+    f[args['region']][data_flag]['gt'][idx, :, :, :] = gt
+    return f
+
+def adjust_rot(args, dataset, data_flag):
+    f = init_dataset(args, len(dataset))
     for idx in range(len(dataset)):
         sample = dataset[idx]
         (h, w) = sample['data'][0, :, :].shape
@@ -28,31 +44,41 @@ def adjust_rot(args, dataset, flag='train'):
         tailpt = (sample['data'][0, :, :] == hill).nonzero()[0].data.numpy()
         headpt = np.array([h//2, w//2])
         angle = find_angle(headpt, tailpt)
+        f = write_dataset_iter(args, f, sample, angle, idx, data_flag)
+    f.close()
+    print('created the rotated dataset for %s' %data_flag)
 
-# def adjust_rot(args, data_flag='train'):
-#     f = h5py.File(args.data_path, 'r') # the path to the dataset
-#     data = f[args.region][data_flag]['data']
-#     (_, h, w) = data.shape
-#     h_orig, w_orig = h-2*args.pad, w-2*args.pad
-#     rots = np.zeros((h_orig, w_orig))
-#     print('shape: (%d, %d) >> (%d, %d)' %(h, w, h_orig, w_orig))
-#     print('%s initialized the rotation matrix ...' %ctime())
-#     for row in range(h_orig):
-#         for col in range(w_orig):
-#             if data[45, row+args.pad, col+args.pad] < 0:
-#                 rots[row, col] = 0
-#                 print('~~~ %s ~~~ ignoring data at (%d, %d)' %(ctime(), row, col), end='\r')
-#             else:
-#                 inp = data[0, row:row+2*args.pad+1, col:col+2*args.pad+1] # args.pad should be 32 to get 1x1 pixel
-#                 best_angle = 0
-#                 for angle in np.arange(10, 360, 10):
-#                     rot_data = snd.rotate(inp, angle, reshape=True)
-#                     if find_hill(args, rot_data, 320): # looking at 320m distance
-#                         best_angle = angle
-#                         break
-#                 print('--- %s --- the best angle found for (%d, %d): %d' %(ctime(), row, col, best_angle), end='\r')
-#                 rots[row, col] = best_angle
-#     save_to = '/'.join(args.data_path.split('/')[:-1])+'/'+data_flag+'_rot.npy'
-#     np.save(save_to, rots)
-#     print('%s: the rotation file is saved.' %ctime())
-#     return save_to
+def rotate(args):
+    train_dataset = LandslideDataset(
+        args['data_path'],
+        args['region'],
+        args['ws'],
+        'train',
+        args['pad']
+    )
+    test_dataset = LandslideDataset(
+        args['data_path'],
+        args['region'],
+        args['ws'],
+        'test',
+        args['pad']
+    )
+    adjust_rot(args, train_dataset, 'train')
+    adjust_rot(args, test_dataset, 'test')
+
+ex = Experiment('rotation_dataset')
+
+@ex.config
+def ex_cfg():
+    args = {
+        'data_path': '/dev/shm/landslide_normalized.h5',
+        'region': 'Veneto',
+        'ws': 200,
+        'pad': 64,
+        'num_feature': 94,
+        'save_to': '/home/ainaz/projects/Landslides/image_data/rotated_landslide.h5'
+    }
+
+@ex.automain
+def main(args):
+    rotate(args)

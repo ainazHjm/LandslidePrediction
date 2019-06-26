@@ -4,10 +4,10 @@ import torch as th
 import torch.nn.functional as F
 
 class FCN(nn.Module):
-    def __init__(self, shape):
+    def __init__(self, input_channel):
         super(FCN, self).__init__()
         self.net = nn.Sequential(
-            nn.ConvTranspose2d(shape[0], 4, kernel_size = (5,5), stride=(1,1)),
+            nn.ConvTranspose2d(input_channel, 4, kernel_size = (5,5), stride=(1,1)),
             nn.ReLU(),
             nn.Conv2d(4, 8, kernel_size=(3,3), stride=(1,1)),
             nn.ReLU(),
@@ -68,13 +68,12 @@ class FCNwPool(nn.Module):
         - 1280m ~ 1600m
     The output is the sum of all these resolutions.
     '''
-    def __init__(self, shape, pixel_res):
+    def __init__(self, input_channel, pixel_res):
         super(FCNwPool, self).__init__()
-        self.shape = shape # CxHxW
         self.pixel_res = pixel_res
 
         self.d1 = nn.Sequential(
-            FCNBasicBlock(shape[0], 64),
+            FCNBasicBlock(input_channel, 64),
             FCNBasicBlock(64, 128),
         )
         self.d2 = FCNDownSample(128, 256)
@@ -146,6 +145,7 @@ class FCNwPool(nn.Module):
         return x
 
     def forward(self, x):
+        (_, _, h, w) = x.shape
         o1 = self.d1(x)
         o2 = self.d2(o1)
         o3 = self.d3(o2)
@@ -154,6 +154,6 @@ class FCNwPool(nn.Module):
         res2 = self.pad(self.u2(o3), x)
         res3 = self.pad(self.u3(o2), x)
         res4 = self.pad(self.u4(o1), x)
-        out = th.stack((res1, res2, res3, res4)).view(-1, 4, self.shape[1], self.shape[2])
+        out = th.stack((res1, res2, res3, res4)).view(-1, 4, h, w)
         fx = self.last(self.get_neighbors(out, self.pixel_res))
         return fx
