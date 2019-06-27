@@ -1,18 +1,25 @@
 import model
-import numpy as np
 import torch as th
 import torch.optim as to
 import torch.nn as nn
 import os
-import torch.nn.functional as F
 from time import ctime
 from tensorboardX import SummaryWriter
-from torchvision.utils import save_image
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from utils.plot import save_config
 # pylint: disable=E1101,E0401,E1123
 
-def validate(args, model, test_loader):
+def create_dir(dir_name):
+    model_dir = dir_name+'/model/'
+    res_dir = dir_name+'/result/'
+    if not os.path.exists(model_dir):
+        os.mkdir(model_dir)
+    if not os.path.exists(res_dir):
+        os.mkdir(res_dir)
+return model_dir, res_dir
+
+@ex.capture
+def validate(model, test_loader):
     with th.no_grad():
         # criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([20]).cuda())
         criterion = nn.BCEWithLogitsLoss()
@@ -33,6 +40,7 @@ def validate(args, model, test_loader):
             cnt += 1
         return running_loss/cnt
 
+@ex.capture
 def train(args, train_loader, test_loader):
     '''
     For the pixel wise prediction, the window size (ws) should be 1 and the padding size (pad) should be 32
