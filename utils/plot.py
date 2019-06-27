@@ -8,48 +8,48 @@ from time import ctime
 from PIL import Image
 from torchvision.utils import save_image
 
-def validate_all(args, model, test_loader):
-    sig = Sigmoid()
-    if not os.path.exists(args.save_res_to+args.region+'/'+args.load_model.split('/')[-1].split('.')[0]):
-        os.mkdir(args.save_res_to+args.region+'/'+args.load_model.split('/')[-1].split('.')[0])
-    save_to = args.save_res_to+args.region+'/'+args.load_model.split('/')[-1].split('.')[0]+'/'
-    test_loader_iter = iter(test_loader)
-    for _ in range(len(test_loader_iter)):
-        batch_sample = test_loader_iter.next()
-        prds = sig(model.forward(batch_sample['data'].cuda()))[:, :, args.pad:-args.pad, args.pad:-args.pad]
-        for num in range(prds.shape[0]):
-            rows, cols = batch_sample['index'][0], batch_sample['index'][1]
-            np.save(save_to+str(rows[num].item())+'_'+str(cols[num].item())+'.npy', prds[num, :, :, :].cpu().data.numpy())
+# def validate_all(args, model, test_loader):
+#     sig = Sigmoid()
+#     if not os.path.exists(args.save_res_to+args.region+'/'+args.load_model.split('/')[-1].split('.')[0]):
+#         os.mkdir(args.save_res_to+args.region+'/'+args.load_model.split('/')[-1].split('.')[0])
+#     save_to = args.save_res_to+args.region+'/'+args.load_model.split('/')[-1].split('.')[0]+'/'
+#     test_loader_iter = iter(test_loader)
+#     for _ in range(len(test_loader_iter)):
+#         batch_sample = test_loader_iter.next()
+#         prds = sig(model.forward(batch_sample['data'].cuda()))[:, :, args.pad:-args.pad, args.pad:-args.pad]
+#         for num in range(prds.shape[0]):
+#             rows, cols = batch_sample['index'][0], batch_sample['index'][1]
+#             np.save(save_to+str(rows[num].item())+'_'+str(cols[num].item())+'.npy', prds[num, :, :, :].cpu().data.numpy())
 
-def find_positives(testData):
-    indices = []
-    for i in range(len(testData)):
-        if th.sum(testData[i]['gt'].cuda()) > 0:
-            indices.append(i)
-    return indices
+# def find_positives(testData):
+#     indices = []
+#     for i in range(len(testData)):
+#         if th.sum(testData[i]['gt'].cuda()) > 0:
+#             indices.append(i)
+#     return indices
 
-def validate_on_ones(args, model, testData):
-    import matplotlib.pyplot as plt
-    sig = Sigmoid()
-    if args.pos_indices:
-        indices = np.load(args.pos_indices)
-        print('loaded positive indices.')
-    else:
-        indices = find_positives(testData)
-        print('found positive indices.')
-        np.save(('/').join(args.data_path.split('/')[:-1])+'/pos_indices.npy', np.array(indices))
-        print('wrote pos_indices')
-    num_samples = 4
-    samples = np.random.choice(indices, num_samples)
-    for i in range(num_samples):
-        d = testData[samples[i]]['data']
-        prds = sig(model.forward(d.view(1, args.feature_num, args.ws+2*args.pad, args.ws+2*args.pad).cuda()))[0, 0, args.pad:-args.pad, args.pad:-args.pad]
-        print(prds.shape)
-        plt.subplot(num_samples, 2, i*2+1)
-        plt.imshow(prds.cpu().data.numpy())
-        plt.subplot(num_samples, 2, (i+1)*2)
-        plt.imshow(testData[samples[i]]['gt'][0, :, :].data.numpy())
-    plt.show()
+# def validate_on_ones(args, model, testData):
+#     import matplotlib.pyplot as plt
+#     sig = Sigmoid()
+#     if args.pos_indices:
+#         indices = np.load(args.pos_indices)
+#         print('loaded positive indices.')
+#     else:
+#         indices = find_positives(testData)
+#         print('found positive indices.')
+#         np.save(('/').join(args.data_path.split('/')[:-1])+'/pos_indices.npy', np.array(indices))
+#         print('wrote pos_indices')
+#     num_samples = 4
+#     samples = np.random.choice(indices, num_samples)
+#     for i in range(num_samples):
+#         d = testData[samples[i]]['data']
+#         prds = sig(model.forward(d.view(1, args.feature_num, args.ws+2*args.pad, args.ws+2*args.pad).cuda()))[0, 0, args.pad:-args.pad, args.pad:-args.pad]
+#         print(prds.shape)
+#         plt.subplot(num_samples, 2, i*2+1)
+#         plt.imshow(prds.cpu().data.numpy())
+#         plt.subplot(num_samples, 2, (i+1)*2)
+#         plt.imshow(testData[samples[i]]['gt'][0, :, :].data.numpy())
+#     plt.show()
 
 def unite_imgs(data_path, orig_shape, ws):
     (h, w) = orig_shape
@@ -91,8 +91,9 @@ def vis_res(prd_path, bg_img_path):
     bg.save("new_"+name+".jpg")
     # bg.show()
 
-def save_config(path, args):
+@ex.capture
+def save_config(path, train_param, data_param):
     with open(path, 'w') as f:
-        for key in args.__dict__.keys():
-            f.write(str(key)+': '+str(args.__dict__[key]))
-            f.write('\n')
+        for params in [train_param, data_param]:
+            for e in params:
+                f.write('{}: {}\n'.format(e, params[e]))

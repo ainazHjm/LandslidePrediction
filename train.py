@@ -1,5 +1,4 @@
 import model
-import numpy as np
 import torch as th
 import torch.optim as to
 import torch.nn as nn
@@ -10,106 +9,96 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from utils.plot import save_config
 # pylint: disable=E1101,E0401,E1123
 
-def filter_batch(batch_sample):
-    (b, _, h, w) = batch_sample['data'].shape
-    data, gt, ignore = [], [], 0
-    for i in range(b):
-        if batch_sample['data'][i, 45, h//2, w//2] < 0:
-            ignore += 1
-        else:
-            data.append(batch_sample['data'][i, :, :, :])
-            gt.append(batch_sample['gt'][i, :])
-    return data, gt, ignore
+def create_dir(dir_name):
+    model_dir = dir_name+'/model/'
+    res_dir = dir_name+'/result/'
+    if not os.path.exists(model_dir):
+        os.mkdir(model_dir)
+    if not os.path.exists(res_dir):
+        os.mkdir(res_dir)
+    return model_dir, res_dir
 
-def validate(args, model, test_loader):
+@ex.capture
+def validate(model, test_loader, train_param, data_param):
     with th.no_grad():
-        criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([20]).cuda())
-        # criterion = nn.BCEWithLogitsLoss()
-        running_loss, ignore_cnt, iter_cnt = 0, 0, 0
-        test_loader_iter = iter(test_loader)
-        for _ in range(len(test_loader_iter)):
-            batch_sample = test_loader_iter.next()
-            data, gt, ignore = filter_batch(batch_sample)
-            ignore_cnt += ignore
-            if not data:
-                continue
-            prds = model.forward(th.stack(data).cuda())
-            loss = criterion(
-                prds[:, :, args.pad:-args.pad, args.pad:-args.pad].view(-1, 1),
-                th.stack(gt).cuda())
+        criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([train_param['pos_weight']]).cuda())
+        running_loss = 0
+        test_iter = iter(test_loader)
+        for _ in range(len(test_iter)):
+            batch_sample = test_iter.next()
+            data, gt = batch_sample['data'].cuda(), batch_sample['gt'].cuda()
+            prds = model.forward(data)[:, :, data_param['pad']:-data_param['pad'], data_param['pad']:-data_param['pad']]
+            indices = gt >= 0
+            loss = criterion(prds[indices], gt[indices])
             running_loss += loss.item()
-            iter_cnt += 1
-        print('~~~ validating ~~~: %f of test data is ignored.' %(ignore_cnt/(len(test_loader_iter)*args.batch_size)))
-        return running_loss/iter_cnt
+        return running_loss/len(test_iter)
 
-def train(args, train_loader, test_loader):
+@ex.capture
+def train(train_loader, test_loader, train_param, data_param, loc_param, _log):
     writer = SummaryWriter()
+    model_dir, _ = create_dir(writer.file_writer.get_logdir())
     sig = nn.Sigmoid()
-
-    exe_time = ctime().replace("  "," ").replace(" ", "_").replace(":","_")
-    dir_name = args.save_model_to + args.region +'/'+ exe_time if args.c else args.save_model_to
-    if not os.path.exists(dir_name):
-        os.mkdir(dir_name)
     
-    train_model = model.FCN(args.feature_num).cuda() if args.model == "FCN" else model.FCNwPool(args.feature_num, args.pix_res).cuda()
-    if args.load_model:
-        train_model.load_state_dict(th.load(args.load_model).state_dict())
-    print("model is initialized ...")
-    optimizer = to.Adam(train_model.parameters(), lr = args.lr, weight_decay = args.decay)
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=args.patience)
-    criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([20]).cuda())
-    # criterion = nn.BCEWithLogitsLoss()
-
-    loss_100, iter_cnt = 0, 0
-    for epoch in range(args.n_epochs):
-        running_loss, ignore_cnt, epoch_iter_cnt = 0, 0, 0
-        train_loader_iter = iter(train_loader)
-        for _ in range(len(train_loader_iter)):
+    train_model = model.FCN(data_param['feature_num']).cuda() if train_param['model'] == "FCN" else model.FCNwPool(data_param['feature_num'], data_param['pix_res']).cuda()
+    if loc_param['load_model']:
+        train_model.load_state_dict(th.load(loc_param['load_model']).state_dict())
+    _log.info('[{}]: {} model is initialized.'.format(ctime(), train_param['model']))
+    
+    optimizer = to.Adam(train_model.parameters(), lr = train_param['lr'], weight_decay = train_param['decay'])
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=train_param['patience'], verbose=True)
+    criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([train_param['pos_weight']]).cuda())
+    _log.info('[{}]: optimizer, scheduler and the loss functions are instantiated.'.format(ctime()))
+    
+    loss_100 = 0
+    for epoch in range(train_param['n_epochs']):
+        running_loss = 0
+        train_iter = iter(train_loader)
+        for iter_ in range(len(train_iter)):
             optimizer.zero_grad()
-            batch_sample = train_loader_iter.next()
-            data, gt, ignore = filter_batch(batch_sample)
-            ignore_cnt += ignore
-            if not data:
-                continue
-            # import ipdb; ipdb.set_trace()
-            prds = train_model.forward(th.stack(data).cuda())
-            loss = criterion(
-                prds[:, :, args.pad:-args.pad, args.pad:-args.pad].view(-1, 1),
-                th.stack(gt).cuda()
-                )
+            
+            batch_sample = train_iter.next()
+            data, gt = batch_sample['data'].cuda(), batch_sample['gt'].cuda()
+            prds = train_model.forward(data)[:, :, data_param['pad']:-data_param['pad'], data_param['pad']:-data_param['pad']]
+            indices = gt >= 0
+            loss = criterion(prds[indices], gt[indices]) # check the loss value
+            import ipdb; ipdb.set_trace()
             running_loss += loss.item()
             loss_100 += loss.item()
+            
             loss.backward()
             optimizer.step()
 
-            writer.add_scalar("loss/train_iter", loss.item(), iter_cnt+1)
+            writer.add_scalar("loss/train_iter", loss.item(), epoch*len(train_iter)+iter_+1)
             writer.add_scalars(
                 "probRange",
                 {'min': th.min(sig(prds)), 'max': th.max(sig(prds))},
-                iter_cnt+1
+                epoch*len(train_iter)+iter_+1
             )
-            if (iter_cnt+1) % 100 == 0:
-                writer.add_scalar("loss/train_100", loss_100/100, iter_cnt+1)
+            if (epoch*len(train_iter)+iter_+1) % 100 == 0:
+                writer.add_scalar("loss/train_100", loss_100/100, epoch*len(train_iter)+iter_+1)
+                _log.info(
+                    '[{}] loss at [{}/{}]: {}'.format(
+                        ctime(),
+                        epoch*len(train_iter)+iter_+1,
+                        train_param['n_epochs']*len(train_iter),
+                        loss_100/100
+                    )
+                )
                 loss_100 = 0
-            iter_cnt += 1
-        print('--- epoch %d ---: %f of training data is ignored.' %(epoch, ignore_cnt/(len(train_loader_iter)*args.batch_size)))
-        if (epoch+1) % args.s == 0:
-            th.save(train_model, dir_name+'/'+str(epoch)+'_'+exe_time+'.pt')
-        v_loss = validate(args, train_model, test_loader)
+            del data, gt, prds
+
+        v_loss = validate(train_model, test_loader)
         scheduler.step(v_loss)
+        _log.info('[{}] validation loss at [{}/{}]: {}'.format(ctime(), epoch+1, train_param['n_epochs'], v_loss))
         writer.add_scalars(
             "loss/grouped",
-            {'test': v_loss, 'train': running_loss/epoch_iter_cnt},
+            {'test': v_loss, 'train': running_loss/len(train_iter)},
             epoch
         )
-        for name, param in train_model.named_parameters():
-            writer.add_histogram(
-                name,
-                param.clone().cpu().data.numpy(),
-                epoch
-            )
+        if (epoch+1) % loc_param['save'] == 0:
+            th.save(train_model, '{}model_at{}.pt'.format(model_dir, epoch))
 
-    writer.export_scalars_to_json(dir_name+'/loss.json')
-    th.save(train_model, dir_name+'/final@'+str(epoch)+'_'+exe_time+'.pt')
-    save_config(dir_name+'/config.txt', args)
-    print("model has been trained and config file has been saved.")
+    writer.export_scalars_to_json(writer.file_writer.get_logdir()+'/loss.json')
+    th.save(train_model, '{}trained_model.pt'.format(model_dir))
+    save_config(writer.file_writer.get_logdir()+'/config.txt')
+    _log.info('[{}]: model has been trained and config file has been saved.'.format(ctime()))
