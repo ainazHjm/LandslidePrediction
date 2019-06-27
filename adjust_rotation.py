@@ -25,7 +25,6 @@ def init_dataset(args, num_samples):
             (num_samples, 1, args['ws'], args['ws']),
             compression='lzf'
         )
-    _log.info('initialized the dataset.')
     return f
 
 def write_dataset_iter(args, f, sample, angle, idx, data_flag='train'):
