@@ -16,6 +16,7 @@ def join_data(args, data_loader):
             (b, c, h, w) = sample['data'].shape
             X[iter_*b:(iter_+1)*b, :] = sample['data'][:, :, h//2, w//2].view(-1, c).numpy()
             y[iter_*b:(iter_+1)*b, :] = sample['gt'].view(-1, 1).numpy()
+            print(ctime())
         data_mat = np.concatenate((X, y), 1)
         np.save(path, data_mat)
     else:
@@ -48,6 +49,8 @@ def reduce_dim(args, data_loader):
     
     if args.visualize:
         visualize(n_datamat)
+    
+    return rdim
 
 def visualize(data):
     if data.shape[1] != 3:

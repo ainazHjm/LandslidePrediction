@@ -7,6 +7,7 @@ import utils.plot as up
 from utils.args import str2bool, __range
 from loader import LandslideDataset, LandslideTrainDataset, create_oversample_data, PixDataset, SampledPixDataset
 from torch.utils.data import DataLoader
+from dimension_reduction import reduce_dim
 
 # def custom_collate_fn(batch):
 #     in_data = th.stack([e['data'] for e in batch], 0)
@@ -56,7 +57,10 @@ def main():
         'train',
     )
     trainLoader = DataLoader(trainData, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
-    #import ipdb; ipdb.set_trace()
+    
+    if args.reduce_dim:
+        reduce_dim(args, trainLoader)
+    # import ipdb; ipdb.set_trace()
     partial_test = SampledPixDataset(
         args.data_path,
         args.sample_path+'test_data.npy',
