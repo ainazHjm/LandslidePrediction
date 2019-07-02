@@ -1,23 +1,19 @@
-# pylint: disable=E0611
-import train
-import argparse
-import torch as th
-import numpy as np
-import utils.plot as up
-from utils.args import str2bool, __range
+from train import train
 from loader import LandslideDataset, LandslideTrainDataset, create_oversample_data, PixDataset, SampledPixDataset
 from torch.utils.data import DataLoader
-from dimension_reduction import reduce_dim
+# from dimension_reduction import reduce_dim
+from time import ctime
 from sacred import Experiment
+from sacred.observers import MongoObserver
 
-ex = Experiment('train_CNN_pixelwise')
+ex = Experiment('CNN_pixelwise')
 
 @ex.config
 def ex_cfg():
     train_param = {
         'lr': 0.0001,
-        'n_epochs': 1,
-        'bs': 9,
+        'n_epochs': 5,
+        'bs': 30,
         'decay': 1e-5,
         'patience': 2,
         'pos_weight': 1,
@@ -29,19 +25,19 @@ def ex_cfg():
         'pix_res': 10,
         'stride': 200,
         'ws': 200,
-        'pad': 64,
+        'pad': 32,
         'feature_num': 94,
         'oversample': False
     }
     loc_param = {
         'load_model': '',
-        'data_path': '/dev/shm/rotated_dataset.h5',
-        'sample_path': '../image_data/'
+        'data_path': '/dev/shm/landslide_normalized.h5',
+        'sample_path': '../image_data/',
         'save': 5
     }
 
 @ex.automain
-def main(train_param, data_param, loc_param):
+def main(train_param, data_param, loc_param, _log):
     '''
     TODO: 
         SampledPixDataset should be changed if I do the dimensionality reduction first
@@ -62,5 +58,5 @@ def main(train_param, data_param, loc_param):
     
     _log.info('[{}]: created train and test datasets.'.format(ctime()))
     _log.info('[{}]: starting to train ...'.format(ctime()))
-    train(loader[0], loader[1])
+    train(loader[0], loader[1], train_param, data_param, loc_param, _log)
     _log.info('[{}]: training is finished!'.format(ctime()))
