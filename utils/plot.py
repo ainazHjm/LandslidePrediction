@@ -1,60 +1,39 @@
 # pylint: disable=E1101
 import torch as th
 import numpy as np
+import matplotlib.pyplot as plt
 import os
-# import scipy.misc
 from torch.nn import Sigmoid
 from time import ctime
 from PIL import Image
 from torchvision.utils import save_image
+from sklearn.manifold import TSNE
 
-def validate_all(args, model, test_loader, shape=(4201, 19250)):
-    sig = Sigmoid()
-    if not os.path.exists(args.save_res_to+args.region+'/'+args.load_model.split('/')[-1].split('.')[0]):
-        os.mkdir(args.save_res_to+args.region+'/'+args.load_model.split('/')[-1].split('.')[0])
-    save_to = args.save_res_to+args.region+'/'+args.load_model.split('/')[-1].split('.')[0]+'/'
-    res_img = np.zeros(shape)
-    test_loader_iter = iter(test_loader)
-    for _ in range(len(test_loader_iter)):
-        batch_sample = test_loader_iter.next()
-        (_, c, h, w) = batch_sample['data'].shape
-        indices = batch_sample['gt'] >= 0
-        data = batch_sample['data'][indices.expand(-1, c, h, w)].cuda()
-        prds = sig(model.forward(data))[:, :, h//2, w//2].view(-1, 1)
-        for num in range(prds.shape[0]):
-            row, col = batch_sample['index'][num]
-            res_img[row, col] = prds[num]
-    np.save(save_to+'predictions.npy', res_img)
-            
-def find_positives(testData):
-    indices = []
-    for i in range(len(testData)):
-        if th.sum(testData[i]['gt'].cuda()) > 0:
-            indices.append(i)
-    return indices
-
-def validate_on_ones(args, model, testData):
-    import matplotlib.pyplot as plt
-    sig = Sigmoid()
-    if args.pos_indices:
-        indices = np.load(args.pos_indices)
-        print('loaded positive indices.')
-    else:
-        indices = find_positives(testData)
-        print('found positive indices.')
-        np.save(('/').join(args.data_path.split('/')[:-1])+'/pos_indices.npy', np.array(indices))
-        print('wrote pos_indices')
-    num_samples = 4
-    samples = np.random.choice(indices, num_samples)
-    for i in range(num_samples):
-        d = testData[samples[i]]['data']
-        prds = sig(model.forward(d.view(1, args.feature_num, args.ws+2*args.pad, args.ws+2*args.pad).cuda()))[0, 0, args.pad:-args.pad, args.pad:-args.pad]
-        print(prds.shape)
-        plt.subplot(num_samples, 2, i*2+1)
-        plt.imshow(prds.cpu().data.numpy())
-        plt.subplot(num_samples, 2, (i+1)*2)
-        plt.imshow(testData[samples[i]]['gt'][0, :, :].data.numpy())
+def embed(data):
+    (c, h, w) = data.shape
+    X = data.reshape((h*w, c))
+    X_transformed = TSNE(n_components=2).fit_transform(X)
+    fig = plt.figure()
+    fig.add_subplot(1,1,1)
+    plt.scatter(X_transformed[:,0], X_transformed[:,1])
     plt.show()
+
+def visualize(data_path, sample_path, region='Veneto', pad=32):
+    from loader import SampledPixDataset
+    dataset = SampledPixDataset(data_path, sample_path+'train_data.npy', region, pad, 'train')
+    idx = np.random.choice(np.arange(len(dataset)), 1)
+    data = dataset[idx[0]]['data']
+    gt = np.zeros((200, 200))
+    gt[100, 100] = dataset[idx[0]]['gt']
+    fig = plt.figure(figsize=(65, 65))
+    for i in range(1, 96):
+        fig.add_subplot(5, 19, i)
+        if i == 95:
+            plt.imshow(gt)    
+        else:
+            plt.imshow(data[i-1, :, :])
+    plt.show()
+    # embed(data)
 
 def unite_imgs(data_path, orig_shape, ws):
     (h, w) = orig_shape
@@ -96,8 +75,8 @@ def vis_res(prd_path, bg_img_path):
     bg.save("new_"+name+".jpg")
     # bg.show()
 
-def save_config(path, args):
+def save_config(path, train_param, data_param):
     with open(path, 'w') as f:
-        for key in args.__dict__.keys():
-            f.write(str(key)+': '+str(args.__dict__[key]))
-            f.write('\n')
+         for params in [train_param, data_param]:
+            for e in params:
+                f.write('{}: {}\n'.format(e, params[e]))
