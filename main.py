@@ -1,31 +1,34 @@
 from train import train
-from loader import LandslideDataset, LandslideTrainDataset, create_oversample_data, PixDataset, SampledPixDataset
+from loader import LandslideDataset, SampledPixDataset, LargeSample
 from torch.utils.data import DataLoader
 # from dimension_reduction import reduce_dim
 from time import ctime
 from sacred import Experiment
-from sacred.observers import MongoObserver
+# from sacred.observers import MongoObserver
 
 ex = Experiment('CNN_pixelwise')
 
 @ex.config
 def ex_cfg():
     train_param = {
+        'optim': 'Adam',
         'lr': 0.0001,
-        'n_epochs': 5,
-        'bs': 30,
+        'n_epochs': 100,
+        'bs': 1,
         'decay': 1e-5,
         'patience': 2,
         'pos_weight': 1,
-        'model': 'FCNwPool'
+        'model': 'FCNwBottleneck'
     }
     data_param = {
+        'grid_search': False,
+        'div': {'train': (100,100), 'test': (20,100)},
         'n_workers': 4,
         'region': 'Veneto',
         'pix_res': 10,
         'stride': 200,
         'ws': 200,
-        'pad': 32,
+        'pad': 64,
         'feature_num': 94,
         'oversample': False
     }
@@ -36,25 +39,55 @@ def ex_cfg():
         'save': 5
     }
 
+def plot_grid(x, y):
+    import matplotlib.pyplot as plt
+    fig = plt.figure()
+    fig.add_subplot(1,1,1)
+    plt.scatter(x, y['Adam'], c='b')
+    plt.scatter(x, y['SGD'], c='r')
+    plt.show()
+
+def grid_search(loader, train_param, data_param, loc_param):
+    n_train_param = train_param
+    n_train_param['n_epochs'] = 1
+    min_loss = +100
+    best_lr, best_optim = -1, None
+    x = list(range(-10, 0))
+    y = {'Adam': [], 'SGD': []}
+    for optim in ['Adam', 'SGD']:
+        for lr in range(-10, 0):
+            n_train_param['lr'] = 2**lr
+            n_train_param['optim'] = optim
+            loss_ = train(loader[0], loader[1], n_train_param, data_param, loc_param, _log)
+            y[optim].extend(loss_)
+            if loss_ < min_loss:
+                min_loss = loss_
+                best_lr = 2**lr
+                best_optim = optim
+    plot_grid(x, y)
+    return best_lr, best_optim
+
 @ex.automain
 def main(train_param, data_param, loc_param, _log):
     '''
-    TODO: 
-        SampledPixDataset should be changed if I do the dimensionality reduction first
-        and writer the new dataset to be used.
     '''
     data = []
-    for flag in ['train', 'test']:
+    for flag in data_param['div']:
         data.append(
-            SampledPixDataset(
+            LargeSample(
                 loc_param['data_path'],
-                loc_param['sample_path']+flag+'_data.npy',
                 data_param['region'],
                 data_param['pad'],
-                flag
+                flag,
+                data_param['div'][flag]
             )
         )
     loader = [DataLoader(d, batch_size=train_param['bs'], shuffle=True, num_workers=data_param['n_workers']) for d in data]
+    # import ipdb; ipdb.set_trace()
+    if data_param['grid_search']:
+        lr, optim = grid_search(loader, train_param, data_param, loc_param)
+        train_param['lr'] = lr
+        train_param['optim'] = optim
     
     _log.info('[{}]: created train and test datasets.'.format(ctime()))
     _log.info('[{}]: starting to train ...'.format(ctime()))

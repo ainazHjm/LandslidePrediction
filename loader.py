@@ -4,7 +4,7 @@ import numpy as np
 import torch as th
 
 class LargeSample(Dataset):
-    def __init__(self, data_path, region, pad, data_flag, div=(5,3)):
+    def __init__(self, data_path, region, pad, data_flag, div=(5,5)):
         super(LargeSample, self).__init__()
         self.data_path = data_path
         self.region = region
@@ -31,7 +31,8 @@ class LargeSample(Dataset):
                     row*h_len:(row+1)*h_len,
                     col*w_len:(col+1)*w_len
                     ],
-                'index': (row, col)
+                'index': (row, col),
+                'div': (self.row, self.col)
             }
             return sample
 

@@ -18,22 +18,36 @@ def create_dir(dir_name):
         os.mkdir(res_dir)
     return model_dir, res_dir
 
-def validate(model, test_loader, data_param, train_param):
+def validate(model, test_loader, data_param, train_param, _log):
     with th.no_grad():
         criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([train_param['pos_weight']]).cuda())
         test_iter = iter(test_loader)
-        running_loss = 0
+        running_loss, ignore = 0, 0
+        pad = data_param['pad']
         for _ in range(len(test_iter)):
             batch_sample = test_iter.next()
-            (_, _, h, w) = batch_sample['data'].shape
+            # (_, _, h, w) = batch_sample['data'].shape
             data = batch_sample['data'].cuda()
             gt = batch_sample['gt'].cuda()
-            prds = model.forward(data)
-            loss = criterion(
-                prds[:, :, h//2, w//2].view(-1, 1),
-                gt)
+            prds = model.forward(data)[:, :, pad:-pad, pad:-pad]
+            indices = gt>=0
+            if train_param['bs'] == 1:
+                if prds[indices.unsqueeze(0)].nelement() == 0:
+                    ignore += 1
+                    continue
+                loss = criterion(prds[indices.unsqueeze(0)], gt[indices])                
+            else:
+                if prds[indices.unsqueeze(1)].nelement() == 0:
+                    ignore += 1
+                    continue
+                loss = criterion(prds[indices.unsqueeze(1)], gt[indices])
             # import ipdb; ipdb.set_trace()
             running_loss += loss.item()
+        _log.info('ignored [{}/{}] when validating...'.format(
+            ignore,
+            data_param['div']['test'][0]*data_param['div']['test'][1]
+            )
+        )
         return running_loss/len(test_iter)
 
 def train(train_loader, test_loader, train_param, data_param, loc_param, _log):
@@ -45,8 +59,10 @@ def train(train_loader, test_loader, train_param, data_param, loc_param, _log):
         train_model = model.FCN(data_param['feature_num']).cuda()
     elif train_param['model'] == 'FCNwPool':
         train_model = model.FCNwPool(data_param['feature_num'], data_param['pix_res']).cuda()
-    else:
+    elif train_param['model'] == 'UNET':
         train_model = model.UNET(data_param['feature_num']).cuda()
+    elif train_param['model'] == 'FCNwBottleneck':
+        train_model = model.FCNwBottleneck(data_param['feature_num'], data_param['pix_res']).cuda()
     
     if loc_param['load_model']:
         train_model.load_state_dict(th.load(loc_param['load_model']).state_dict())
@@ -55,24 +71,40 @@ def train(train_loader, test_loader, train_param, data_param, loc_param, _log):
     if th.cuda.device_count() > 1:
         train_model = nn.DataParallel(train_model)
     
-    optimizer = to.Adam(train_model.parameters(), lr=train_param['lr'], weight_decay=train_param['decay'])
+    if train_param['optim'] == 'Adam':
+        optimizer = to.Adam(train_model.parameters(), lr=train_param['lr'], weight_decay=train_param['decay'])
+    else:
+        optimizer = to.SGD(train_model.parameters(), lr=train_param['lr'], weight_decay=train_param['decay'])
+    
     scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=train_param['patience'], verbose=True)
     criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([train_param['pos_weight']]).cuda())
 
-    loss_100 = 0
+    loss_ = 0
+    pad = data_param['pad']
     for epoch in range(train_param['n_epochs']):
-        running_loss = 0
+        running_loss, ignore = 0, 0
         train_iter = iter(train_loader)
         for iter_ in range(len(train_iter)):
             optimizer.zero_grad()
 
             batch_sample = train_iter.next()
-            (_, _, h, w) = batch_sample['data'].shape
+            # (_, _, h, w) = batch_sample['data'].shape
             data, gt = batch_sample['data'].cuda(), batch_sample['gt'].cuda()
-            prds = train_model.forward(data)
-            loss = criterion(prds[:, :, h//2, w//2].view(-1, 1), gt)
+            prds = train_model.forward(data)[:, :, pad:-pad, pad:-pad]
+            indices = gt>=0
+            if train_param['bs'] == 1:
+                if prds[indices.unsqueeze(0)].nelement() == 0:
+                    ignore += 1
+                    continue
+                loss = criterion(prds[indices.unsqueeze(0)], gt[indices])                
+            else:
+                if prds[indices.unsqueeze(1)].nelement() == 0:
+                    ignore += 1
+                    continue
+                loss = criterion(prds[indices.unsqueeze(1)], gt[indices])
+
             running_loss += loss.item()
-            loss_100 += loss.item()
+            loss_ += loss.item()
             
             loss.backward()
             optimizer.step()
@@ -83,23 +115,23 @@ def train(train_loader, test_loader, train_param, data_param, loc_param, _log):
                 {'min': th.min(sig(prds)), 'max': th.max(sig(prds))},
                 epoch*len(train_iter)+iter_+1
             )
-            if (epoch*len(train_iter)+iter_+1) % 100 == 0:
-                writer.add_scalar("loss/train_100", loss_100/100, epoch*len(train_iter)+iter_+1)
+            if (epoch*len(train_iter)+iter_+1) % 20 == 0:
+                writer.add_scalar("loss/train_20", loss_/20, epoch*len(train_iter)+iter_+1)
                 _log.info(
                     '[{}] loss at [{}/{}]: {}'.format(
                         ctime(),
                         epoch*len(train_iter)+iter_+1,
                         train_param['n_epochs']*len(train_iter),
-                        loss_100/100
+                        loss_/20
                     )
                 )
-                loss_100 = 0
-            del prds, gt, data
+                loss_ = 0
+            del prds, gt, data, indices
 
         if (epoch+1) % loc_param['save'] == 0:
             th.save(train_model, model_dir+'model_{}.pt'.format(str(epoch+1)))
         
-        v_loss = validate(train_model, test_loader, data_param, train_param)
+        v_loss = validate(train_model, test_loader, data_param, train_param, _log)
         scheduler.step(v_loss)
         _log.info('[{}] validation loss at [{}/{}]: {}'.format(ctime(), epoch+1, train_param['n_epochs'], v_loss))
         writer.add_scalars(
@@ -107,8 +139,15 @@ def train(train_loader, test_loader, train_param, data_param, loc_param, _log):
             {'test': v_loss, 'train': running_loss/len(train_iter)},
             epoch
         )
+        _log.info('ignored [{}/{}] when training...'.format(
+            ignore,
+            data_param['div']['train'][0]*data_param['div']['train'][1]
+            )
+        )
 
     writer.export_scalars_to_json(model_dir+'loss.json')
     th.save(train_model, model_dir+'trained_model.pt')
     save_config(writer.file_writer.get_logdir()+'/config.txt', train_param, data_param)
     _log.info('[{}] model has been trained and config file has been saved.'.format(ctime()))
+    
+    return v_loss

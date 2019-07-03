@@ -314,6 +314,6 @@ class FCNwBottleneck(nn.Module):
         res3 = self.pad(self.upsample[1:](o3), x)
         res2 = self.pad(self.upsample[2:](o2), x)
         res1 = self.pad(self.upsample[3](o1), x)
-        import ipdb; ipdb.set_trace()
+        # import ipdb; ipdb.set_trace()
         out = th.stack((res1, res2, res3, res4)).view(-1, 4, x.shape[2], x.shape[3])
         return self.last(out)
