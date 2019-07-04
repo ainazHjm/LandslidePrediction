@@ -24,57 +24,11 @@ class RotDataset(Dataset):
         with h5py.File(self.data_path, 'r') as f:
             sample = {
                 'data': f[self.region][self.data_flag]['data'][index, :, :, :],
-                'gt': f[self.region][self.data_flag]['gt'][index, :, :, :]
+                'gt': f[self.region][self.data_flag]['gt'][index, :, :, :],
+                'index': f[self.region][self.data_flag]['index'][index, :],
+                'angle': f[self.region][self.data_flag]['angle'][index, :],
             }
             return sample
-
-# class RotationDataset(Dataset):
-#     def __init__(self, data_path, rot_path, region, feature_num, data_flag, pad):
-#         super(RotationDataset, self).__init__()
-#         self.data_path = data_path
-#         self.region = region
-#         self.feature_num = feature_num
-#         self.data_flag = data_flag
-#         self.rotations = np.load(rot_path)
-#         self.pad = pad
-#         self.shape = self.get_shape()
-    
-#     def get_shape(self):
-#         with h5py.File(self.data_path, 'r') as f:
-#             (_, h, w) = f[self.region][self.data_flag]['gt'].shape
-#             return (h, w)
-
-#     def rotate(self, data, angle):
-#         rots = []
-#         for _ in range(data.shape[0]):
-#             rots.append(th.tensor(snd.rotate(data, angle, reshape=True)))
-#         return th.stack(rots)
-
-#     def __len__(self):
-#         '''
-#         the length of the dataset is the total number of pixels in the ground truth because,
-#         ground truth is not padded.
-#         '''
-#         with h5py.File(self.data_path, 'r') as f:
-#             (_, h, w) = f[self.region][self.data_flag]['gt'].shape
-#             return h*w
-
-#     def __getitem__(self, index):
-#         with h5py.File(self.data_path, 'r') as f:
-#             dataset = f[self.region][self.data_flag]
-#             (h, w) = self.shape
-#             row = index//w
-#             col = index - (index//w)*w
-#             rotated_data = self.rotate(
-#                 dataset['data'][:, row:row+2*self.pad+1, col:col+2*self.pad+1],
-#                 self.rotations[row, col],
-#             )
-#             sample = {
-#                 'data': rotated_data, #the shape should be (c, h, w)
-#                 'gt': th.tensor(dataset['gt'][0, row, col]),
-#                 'index': (row, col)
-#             }
-#             return sample
 
 class LandslideTrainDataset(Dataset):
     def __init__(self, path, region, stride, ws, pts, oversample_path, pad=64, feature_num=94):

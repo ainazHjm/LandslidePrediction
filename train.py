@@ -18,7 +18,6 @@ def create_dir(dir_name):
         os.mkdir(res_dir)
     return model_dir, res_dir
 
-@ex.capture
 def validate(model, test_loader, train_param, data_param):
     with th.no_grad():
         criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([train_param['pos_weight']]).cuda())
@@ -29,17 +28,18 @@ def validate(model, test_loader, train_param, data_param):
             data, gt = batch_sample['data'].cuda(), batch_sample['gt'].cuda()
             prds = model.forward(data)[:, :, data_param['pad']:-data_param['pad'], data_param['pad']:-data_param['pad']]
             indices = gt >= 0
+            if prds[indices].nelement() == 0:
+                continue
             loss = criterion(prds[indices], gt[indices])
             running_loss += loss.item()
         return running_loss/len(test_iter)
 
-@ex.capture
 def train(train_loader, test_loader, train_param, data_param, loc_param, _log):
     writer = SummaryWriter()
     model_dir, _ = create_dir(writer.file_writer.get_logdir())
     sig = nn.Sigmoid()
     
-    train_model = model.FCN(data_param['feature_num']).cuda() if train_param['model'] == "FCN" else model.FCNwPool(data_param['feature_num'], data_param['pix_res']).cuda()
+    train_model = model.FCNwBottleneck(data_param['feature_num'], data_param['pix_res']).cuda() if train_param['model'] == "FCNwBottleneck" else model.FCNwPool(data_param['feature_num'], data_param['pix_res']).cuda()
     if loc_param['load_model']:
         train_model.load_state_dict(th.load(loc_param['load_model']).state_dict())
     _log.info('[{}]: {} model is initialized.'.format(ctime(), train_param['model']))
@@ -49,7 +49,7 @@ def train(train_loader, test_loader, train_param, data_param, loc_param, _log):
     criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([train_param['pos_weight']]).cuda())
     _log.info('[{}]: optimizer, scheduler and the loss functions are instantiated.'.format(ctime()))
     
-    loss_100 = 0
+    loss_ = 0
     for epoch in range(train_param['n_epochs']):
         running_loss = 0
         train_iter = iter(train_loader)
@@ -60,10 +60,12 @@ def train(train_loader, test_loader, train_param, data_param, loc_param, _log):
             data, gt = batch_sample['data'].cuda(), batch_sample['gt'].cuda()
             prds = train_model.forward(data)[:, :, data_param['pad']:-data_param['pad'], data_param['pad']:-data_param['pad']]
             indices = gt >= 0
+            if prds[indices].nelement() == 0:
+                continue
             loss = criterion(prds[indices], gt[indices]) # check the loss value
-            import ipdb; ipdb.set_trace()
+            # import ipdb; ipdb.set_trace()
             running_loss += loss.item()
-            loss_100 += loss.item()
+            loss_ += loss.item()
             
             loss.backward()
             optimizer.step()
@@ -74,20 +76,20 @@ def train(train_loader, test_loader, train_param, data_param, loc_param, _log):
                 {'min': th.min(sig(prds)), 'max': th.max(sig(prds))},
                 epoch*len(train_iter)+iter_+1
             )
-            if (epoch*len(train_iter)+iter_+1) % 100 == 0:
-                writer.add_scalar("loss/train_100", loss_100/100, epoch*len(train_iter)+iter_+1)
+            if (epoch*len(train_iter)+iter_+1) % 20 == 0:
+                writer.add_scalar("loss/train_100", loss_/20, epoch*len(train_iter)+iter_+1)
                 _log.info(
                     '[{}] loss at [{}/{}]: {}'.format(
                         ctime(),
                         epoch*len(train_iter)+iter_+1,
                         train_param['n_epochs']*len(train_iter),
-                        loss_100/100
+                        loss_/20
                     )
                 )
-                loss_100 = 0
+                loss_ = 0
             del data, gt, prds
 
-        v_loss = validate(train_model, test_loader)
+        v_loss = validate(train_model, test_loader, train_param, data_param)
         scheduler.step(v_loss)
         _log.info('[{}] validation loss at [{}/{}]: {}'.format(ctime(), epoch+1, train_param['n_epochs'], v_loss))
         writer.add_scalars(
@@ -100,5 +102,5 @@ def train(train_loader, test_loader, train_param, data_param, loc_param, _log):
 
     writer.export_scalars_to_json(writer.file_writer.get_logdir()+'/loss.json')
     th.save(train_model, '{}trained_model.pt'.format(model_dir))
-    save_config(writer.file_writer.get_logdir()+'/config.txt')
+    save_config(writer.file_writer.get_logdir()+'/config.txt', train_param, data_param)
     _log.info('[{}]: model has been trained and config file has been saved.'.format(ctime()))

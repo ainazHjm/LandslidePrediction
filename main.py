@@ -17,37 +17,32 @@ ex = Experiment('train_rotation')
 def ex_cfg():
     train_param = {
         'lr': 0.0001,
-        'n_epochs': 1,
-        'bs': 9,
+        'n_epochs': 100,
+        'bs': 8,
         'decay': 1e-5,
         'patience': 2,
-        'pos_weight': 1,
-        'model': 'FCNwPool'
+        'pos_weight': 2,
+        'model': 'FCNwBottleneck'
     }
     data_param = {
         'n_workers': 4,
         'region': 'Veneto',
         'pix_res': 10,
-        'stride': 200,
-        'ws': 200,
+        'stride': 400,
+        'ws': 400,
         'pad': 64,
         'feature_num': 94,
         'oversample': False
     }
     loc_param = {
         'load_model': '',
-        'data_path': '/dev/shm/rotated_dataset.h5',
+        'data_path': '/media/ainaz/48F25DF3F25DE62A/data/rotated_landslide.h5',
         # 'save_model_to': '../models/CNN/',
-        'save': 5
+        'save': 10
     }
-    # test_param = {
-    #     'validate': False,
-    #     # 'save_res_to': '../output/CNN/',
-    #     'random_sample': False # not sure to include it or not.
-    # }
 
 @ex.automain
-def main(train_param, data_param, loc_param):
+def main(train_param, data_param, loc_param, _log):
     data = []
     for flag in ['train', 'test']:
         data.append(RotDataset(loc_param['data_path'], data_param['region'], flag))
@@ -55,5 +50,5 @@ def main(train_param, data_param, loc_param):
     
     _log.info('[{}]: created train and test datasets.'.format(ctime()))
     _log.info('[{}]: starting to train ...'.format(ctime()))
-    train(loader[0], loader[1])
+    train(loader[0], loader[1], train_param, data_param, loc_param, _log)
     _log.info('[{}]: training is finished!'.format(ctime()))

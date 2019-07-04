@@ -91,7 +91,6 @@ def vis_res(prd_path, bg_img_path):
     bg.save("new_"+name+".jpg")
     # bg.show()
 
-@ex.capture
 def save_config(path, train_param, data_param):
     with open(path, 'w') as f:
         for params in [train_param, data_param]:

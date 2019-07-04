@@ -2,7 +2,7 @@ import torch as th
 import torch.nn as nn
 from torchvision.utils import save_image
 from loader import RotDataset
-from time import ctime()
+from time import ctime
 from sacred import Experiment
 
 def validate(params, test_dataset, _log):

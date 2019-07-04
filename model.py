@@ -157,3 +157,124 @@ class FCNwPool(nn.Module):
         out = th.stack((res1, res2, res3, res4)).view(-1, 4, h, w)
         fx = self.last(self.get_neighbors(out, self.pixel_res))
         return fx
+
+class InConv(nn.Module):
+    def __init__(self, in_channel):
+        super(InConv, self).__init__()
+        self.net = nn.Sequential(
+            nn.Conv2d(in_channel, in_channel, kernel_size=(7,7), stride=(2,2), padding=(3,3), bias=False),
+            nn.BatchNorm2d(in_channel),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+        )
+    def forward(self, x):
+        return self.net(x)
+
+class OutConv(nn.Module):
+    def __init__(self, in_channel):
+        super(OutConv, self).__init__()
+        self.net = nn.Sequential(
+            nn.Conv2d(in_channel, 4, kernel_size=(1,1), stride=(1,1), bias=False),
+            nn.BatchNorm2d(4),
+            nn.ConvTranspose2d(4, 1, kernel_size=(2,2), stride=(2,2), bias=False),
+        )
+    def forward(self, x):
+        return self.net(x)
+
+class BottleNeck(nn.Module):
+    def __init__(self, in_channel, mid_channel, out_channel):
+        super(BottleNeck, self).__init__()
+        self.net = nn.Sequential(
+            nn.Conv2d(in_channel, mid_channel, kernel_size=(1,1), stride=(1,1), bias=False),
+            nn.BatchNorm2d(mid_channel),
+            nn.Conv2d(mid_channel, mid_channel, kernel_size=(3,3), stride=(1,1), padding=(1,1), bias=False),
+            nn.BatchNorm2d(mid_channel),
+            nn.Conv2d(mid_channel, out_channel, kernel_size=(1,1), stride=(1,1), bias=False),
+            nn.BatchNorm2d(out_channel),
+            nn.ReLU(inplace=True),
+        )
+    def forward(self, x):
+        return self.net(x)
+
+class BNwDownSample(nn.Module):
+    def __init__(self, in_channel, out_channel):
+        super(BNwDownSample, self).__init__()
+        self.net = nn.Sequential(
+            BottleNeck(in_channel, in_channel, in_channel),
+            nn.Conv2d(in_channel, out_channel, kernel_size=(1,1), stride=(2,2), bias=False),
+            nn.BatchNorm2d(out_channel),
+        )
+    def forward(self, x):
+        return self.net(x)
+
+class BNwUpSample(nn.Module):
+    def __init__(self, in_channel, out_channel):
+        super(BNwUpSample, self).__init__()
+        self.net = nn.Sequential(
+            nn.ConvTranspose2d(in_channel, out_channel, kernel_size=(2,2), stride=(2,2), bias=False), #Upsampling here
+            nn.BatchNorm2d(out_channel),
+            BottleNeck(out_channel, out_channel, out_channel),
+        )
+    def forward(self, x):
+        return self.net(x)
+
+class DSLayer(nn.Module):
+    def __init__(self, in_channel, mid_channel, out_channel):
+        super(DSLayer, self).__init__()
+        self.net = nn.Sequential(
+            BottleNeck(in_channel, in_channel, in_channel),
+            BottleNeck(in_channel, in_channel, mid_channel),
+            BottleNeck(mid_channel, mid_channel, mid_channel),
+            BNwDownSample(mid_channel, out_channel),
+        )
+    def forward(self, x):
+        return self.net(x)
+
+class USLayer(nn.Module):
+    def __init__(self, in_channel, mid_channel, out_channel):
+        super(USLayer, self).__init__()
+        self.net = nn.Sequential(
+            BNwUpSample(in_channel, mid_channel),
+            BottleNeck(mid_channel, mid_channel, out_channel),
+            BottleNeck(out_channel, out_channel, out_channel),
+            BottleNeck(out_channel, out_channel, out_channel),
+        )
+    def forward(self, x):
+        return self.net(x)
+
+class FCNwBottleneck(nn.Module):
+    def __init__(self, in_channel, pix_res):
+        super(FCNwBottleneck, self).__init__()
+        self.downsample = nn.Sequential(
+            InConv(in_channel),
+            DSLayer(in_channel, 32, 64),
+            DSLayer(64, 128, 256),
+            DSLayer(256, 512, 1024),
+        )
+        self.upsample = nn.Sequential(
+            USLayer(1024, 512, 256),
+            USLayer(256, 128, 64),
+            USLayer(64, 32, in_channel),
+            OutConv(in_channel),
+        )
+        self.last = nn.Conv2d(4, 1, kernel_size=(1,1), stride=(1,1), bias=True)
+    
+    def pad(self, x, xt):
+        (_, _, h, w) = x.shape
+        (_, _, ht, wt) = xt.shape
+        hdif = ht - h
+        wdif = wt - w
+        x = F.pad(x, (wdif//2, wdif-wdif//2, hdif//2, hdif-hdif//2))
+        return x
+
+    def forward(self, x):
+        o1 = self.downsample[0](x)
+        o2 = self.downsample[1](o1)
+        o3 = self.downsample[2](o2)
+        o4 = self.downsample[3](o3)
+        res4 = self.pad(self.upsample(o4), x)
+        res3 = self.pad(self.upsample[1:](o3), x)
+        res2 = self.pad(self.upsample[2:](o2), x)
+        res1 = self.pad(self.upsample[3](o1), x)
+        out = th.stack((res1, res2, res3, res4)).view(-1, 4, x.shape[2], x.shape[3])
+        return self.last(out)
