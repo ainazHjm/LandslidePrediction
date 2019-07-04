@@ -44,8 +44,11 @@ def train(train_loader, test_loader, train_param, data_param, loc_param, _log):
         train_model.load_state_dict(th.load(loc_param['load_model']).state_dict())
     _log.info('[{}]: {} model is initialized.'.format(ctime(), train_param['model']))
     
+    if th.cuda.device_count() > 1:
+                train_model = nn.DataParallel(train_model)
+
     optimizer = to.Adam(train_model.parameters(), lr = train_param['lr'], weight_decay = train_param['decay'])
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=train_param['patience'], verbose=True)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=train_param['patience'], verbose=True, factor=0.5)
     criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([train_param['pos_weight']]).cuda())
     _log.info('[{}]: optimizer, scheduler and the loss functions are instantiated.'.format(ctime()))
     
