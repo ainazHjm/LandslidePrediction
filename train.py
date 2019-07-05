@@ -45,7 +45,7 @@ def train(train_loader, test_loader, train_param, data_param, loc_param, _log):
     _log.info('[{}]: {} model is initialized.'.format(ctime(), train_param['model']))
     
     if th.cuda.device_count() > 1:
-                train_model = nn.DataParallel(train_model)
+        train_model = nn.DataParallel(train_model)
 
     optimizer = to.Adam(train_model.parameters(), lr = train_param['lr'], weight_decay = train_param['decay'])
     scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=train_param['patience'], verbose=True, factor=0.5)
