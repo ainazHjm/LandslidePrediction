@@ -283,6 +283,7 @@ class USLayer(nn.Module):
 class FCNwBottleneck(nn.Module):
     def __init__(self, in_channel, pix_res):
         super(FCNwBottleneck, self).__init__()
+        self.pix_res = pix_res
         self.downsample = nn.Sequential(
             InConv(in_channel),
             DSLayer(in_channel, 32, 64),
@@ -296,6 +297,7 @@ class FCNwBottleneck(nn.Module):
             OutConv(in_channel),
         )
         self.last = nn.Conv2d(4, 1, kernel_size=(1,1), stride=(1,1), bias=True)
+        # self.last = nn.Conv2d(20, 1, kernel_size=(1,1), stride=(1,1))
     
     def pad(self, x, xt):
         (_, _, h, w) = x.shape
@@ -304,6 +306,41 @@ class FCNwBottleneck(nn.Module):
         wdif = wt - w
         x = F.pad(x, (wdif//2, wdif-wdif//2, hdif//2, hdif-hdif//2))
         return x
+
+    def create_mask(self, padding):
+        kernel = th.zeros(5, 1, 2*padding+1, 2*padding+1)
+        kernel[0, 0, 0, padding] = 1
+        kernel[1, 0, padding//2, padding] = 1
+        kernel[2, 0, padding//2 + padding, padding] = 1
+        kernel[3, 0, -1, padding] = 1
+        kernel[-1, 0, padding, padding] = 1
+        return kernel.cuda()
+
+    def get_neighbors(self, features, pixel_res):
+        (b, c, h, w) = features.shape # c should be 4 because we have four different resolutions
+        n_features = th.zeros(b, c*5, h, w).cuda()
+
+        n_features[:, 0:5, :, :] = F.conv2d(
+            features[:, 0, :, :].view(-1, 1, h, w),
+            self.create_mask(40//pixel_res + 1),
+            padding=40//pixel_res + 1,
+            )
+        n_features[:, 5:10, :, :] = F.conv2d(
+            features[:, 1, :, :].view(-1, 1, h, w),
+            self.create_mask(80//pixel_res + 1),
+            padding=80//pixel_res + 1,
+            )
+        n_features[:, 10:15, :, :] = F.conv2d(
+            features[:, 2, :, :].view(-1, 1, h, w),
+            self.create_mask(160//pixel_res + 1),
+            padding=160//pixel_res + 1,
+            )
+        n_features[:, 15:20, :, :] = F.conv2d(
+            features[:, 3, :, :].view(-1, 1, h, w),
+            self.create_mask(320//pixel_res + 1),
+            padding=320//pixel_res + 1,
+            )
+        return n_features
 
     def forward(self, x):
         o1 = self.downsample[0](x)
@@ -314,6 +351,6 @@ class FCNwBottleneck(nn.Module):
         res3 = self.pad(self.upsample[1:](o3), x)
         res2 = self.pad(self.upsample[2:](o2), x)
         res1 = self.pad(self.upsample[3](o1), x)
-        import ipdb; ipdb.set_trace()
+        # import ipdb; ipdb.set_trace()
         out = th.stack((res1, res2, res3, res4)).view(-1, 4, x.shape[2], x.shape[3])
         return self.last(out)

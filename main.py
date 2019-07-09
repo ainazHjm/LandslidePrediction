@@ -11,21 +11,21 @@ ex = Experiment('CNN_pixelwise')
 @ex.config
 def ex_cfg():
     train_param = {
-        'lr': 0.0001,
-        'n_epochs': 5,
-        'bs': 30,
+        'lr': 0.003,
+        'n_epochs': 100,
+        'bs': 20,
         'decay': 1e-5,
         'patience': 2,
-        'pos_weight': 1,
-        'model': 'FCNwPool'
+        'pos_weight': 2,
+        'model': 'FCNwBottleneck'
     }
     data_param = {
-        'n_workers': 4,
+        'n_workers': 8,
         'region': 'Veneto',
         'pix_res': 10,
         'stride': 200,
         'ws': 200,
-        'pad': 32,
+        'pad': 64,
         'feature_num': 94,
         'oversample': False
     }
@@ -33,30 +33,46 @@ def ex_cfg():
         'load_model': '',
         'data_path': '/dev/shm/landslide_normalized.h5',
         'sample_path': '../image_data/',
-        'save': 5
+        'save': 10
     }
 
+# def my_collate(batch):
+#     data = [d['data'] for d in batch]
+#     gt = [d['gt'] for d in batch]
+#     index = [d['index'] for d in batch]
+#     return data, gt, index
+
 @ex.automain
-def main(train_param, data_param, loc_param, _log):
+def main(train_param, data_param, loc_param, _log, _run):
     '''
     TODO: 
         SampledPixDataset should be changed if I do the dimensionality reduction first
         and writer the new dataset to be used.
     '''
     data = []
-    for flag in ['train', 'test']:
-        data.append(
-            SampledPixDataset(
-                loc_param['data_path'],
-                loc_param['sample_path']+flag+'_data.npy',
-                data_param['region'],
-                data_param['pad'],
-                flag
-            )
+    data.append(
+        SampledPixDataset(
+            loc_param['data_path'],
+            loc_param['sample_path']+'train_ones.npy',
+            data_param['region'],
+            data_param['pad'],
+            data_param['ws'],
+            'train'
         )
+    )
+    data.append(
+        LandslideDataset(
+            loc_param['data_path'],
+            data_param['region'],
+            data_param['ws'],
+            'test',
+            data_param['pad']
+        )
+    )
+    
     loader = [DataLoader(d, batch_size=train_param['bs'], shuffle=True, num_workers=data_param['n_workers']) for d in data]
     
     _log.info('[{}]: created train and test datasets.'.format(ctime()))
     _log.info('[{}]: starting to train ...'.format(ctime()))
-    train(loader[0], loader[1], train_param, data_param, loc_param, _log)
+    train(loader[0], loader[1], train_param, data_param, loc_param, _log, _run)
     _log.info('[{}]: training is finished!'.format(ctime()))

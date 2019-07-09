@@ -30,9 +30,10 @@ def sample_fn(args, data, flag='train'):
             )
         )
     )
+    np.save(args.save_to+flag+'_ones.npy', one_samples)
     res = np.concatenate((one_samples, zero_samples))
     np.random.shuffle(res)
-    np.save(args.save_to+flag+'_data.npy', res)
+    # np.save(args.save_to+flag+'_data.npy', res)
     
 def sample(args):
     gt = np.array(Image.open(args.gt_path))

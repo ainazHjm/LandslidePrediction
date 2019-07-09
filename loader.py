@@ -3,38 +3,6 @@ import h5py
 import numpy as np
 import torch as th
 
-class LargeSample(Dataset):
-    def __init__(self, data_path, region, pad, data_flag, div=(5,3)):
-        super(LargeSample, self).__init__()
-        self.data_path = data_path
-        self.region = region
-        self.pad = pad
-        self.data_flag = data_flag
-        (self.row, self.col) = div
-    
-    def __len__(self):
-        return self.row*self.col
-    
-    def __getitem__(self, index):
-        row, col = index//self.col, index-(index//self.col)*self.col
-        with h5py.File(self.data_path, 'r') as f:
-            (_, h, w) = f[self.region][self.data_flag]['gt'].shape
-            h_len, w_len = h//self.row, w//self.col
-            sample = {
-                'data': f[self.region][self.data_flag]['data'][
-                    :,
-                    row*h_len:(row+1)*h_len+2*self.pad,
-                    col*w_len:(col+1)*w_len+2*self.pad
-                    ],
-                'gt': f[self.region][self.data_flag]['gt'][
-                    0,
-                    row*h_len:(row+1)*h_len,
-                    col*w_len:(col+1)*w_len
-                    ],
-                'index': (row, col)
-            }
-            return sample
-
 class LandslideTrainDataset(Dataset):
     def __init__(self, path, region, stride, ws, pts, oversample_path, pad=64, feature_num=94):
         super(LandslideTrainDataset, self).__init__()
@@ -118,12 +86,13 @@ class LandslideTrainDataset(Dataset):
                 return self.get_item(n_index, dataset, gt, self.stride//4)
 
 class SampledPixDataset(Dataset):
-    def __init__(self, data_path, data_indices_path, region, pad, data_flag):
+    def __init__(self, data_path, data_indices_path, region, pad, ws, data_flag):
         super(SampledPixDataset, self).__init__()
         self.data_path = data_path
         self.indices = np.load(data_indices_path) # a nx2 array
         self.region = region
         self.pad = pad
+        self.ws = ws
         self.data_flag = data_flag
 
     def __len__(self):
@@ -133,8 +102,16 @@ class SampledPixDataset(Dataset):
         row, col = self.indices[index][0], self.indices[index][1]
         with h5py.File(self.data_path, 'r') as f:
             sample = {
-                'data': f[self.region][self.data_flag]['data'][:, row-self.pad:row+self.pad+1, col-self.pad:col+self.pad+1],
-                'gt': f[self.region][self.data_flag]['gt'][:, row, col],
+                'data': f[self.region][self.data_flag]['data'][
+                    :,
+                    row-(self.ws//2):row+(2*self.pad+self.ws//2),
+                    col-(self.ws//2):col+(2*self.pad+self.ws//2)
+                ],
+                'gt': f[self.region][self.data_flag]['gt'][
+                    :,
+                    row+self.pad-(self.ws//2):row+self.pad+(self.ws//2),
+                    col+self.pad-(self.ws//2):col+self.pad+(self.ws//2)
+                ],
                 'index': (row, col)
             }
             return sample
