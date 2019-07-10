@@ -6,7 +6,7 @@ from time import ctime
 from sacred import Experiment
 # from sacred.observers import MongoObserver
 
-ex = Experiment('CNN_pixelwise')
+ex = Experiment('CNNLargePatch')
 
 @ex.config
 def ex_cfg():
@@ -14,20 +14,20 @@ def ex_cfg():
         'optim': 'Adam',
         'lr': 0.0001,
         'n_epochs': 100,
-        'bs': 1,
+        'bs': 8,
         'decay': 1e-5,
         'patience': 2,
-        'pos_weight': 1,
+        'pos_weight': 2,
         'model': 'FCNwBottleneck'
     }
     data_param = {
         'grid_search': False,
-        'div': {'train': (100,100), 'test': (20,100)},
+        # 'div': {'train': (20,20), 'test': (4,20)},
         'n_workers': 4,
         'region': 'Veneto',
         'pix_res': 10,
-        'stride': 200,
-        'ws': 200,
+        'stride': 400,
+        'ws': 400,
         'pad': 64,
         'feature_num': 94,
         'oversample': False
@@ -36,7 +36,7 @@ def ex_cfg():
         'load_model': '',
         'data_path': '/dev/shm/landslide_normalized.h5',
         'sample_path': '../image_data/',
-        'save': 5
+        'save': 10
     }
 
 def plot_grid(x, y):
@@ -47,7 +47,7 @@ def plot_grid(x, y):
     plt.scatter(x, y['SGD'], c='r')
     plt.show()
 
-def grid_search(loader, train_param, data_param, loc_param):
+def grid_search(loader, train_param, data_param, loc_param, _log, _run):
     n_train_param = train_param
     n_train_param['n_epochs'] = 1
     min_loss = +100
@@ -58,7 +58,7 @@ def grid_search(loader, train_param, data_param, loc_param):
         for lr in range(-10, 0):
             n_train_param['lr'] = 2**lr
             n_train_param['optim'] = optim
-            loss_ = train(loader[0], loader[1], n_train_param, data_param, loc_param, _log)
+            loss_ = train(loader[0], loader[1], n_train_param, data_param, loc_param, _log, _run)
             y[optim].extend(loss_)
             if loss_ < min_loss:
                 min_loss = loss_
@@ -68,28 +68,35 @@ def grid_search(loader, train_param, data_param, loc_param):
     return best_lr, best_optim
 
 @ex.automain
-def main(train_param, data_param, loc_param, _log):
+def main(train_param, data_param, loc_param, _log, _run):
     '''
     '''
     data = []
-    for flag in data_param['div']:
+    for flag in ['train', 'test']:
         data.append(
-            LargeSample(
+            # LargeSample(
+            #     loc_param['data_path'],
+            #     data_param['region'],
+            #     data_param['pad'],
+            #     flag,
+            #     data_param['div'][flag]
+            # )
+            LandslideDataset(
                 loc_param['data_path'],
                 data_param['region'],
-                data_param['pad'],
+                data_param['ws'],
                 flag,
-                data_param['div'][flag]
+                data_param['pad']
             )
         )
     loader = [DataLoader(d, batch_size=train_param['bs'], shuffle=True, num_workers=data_param['n_workers']) for d in data]
     # import ipdb; ipdb.set_trace()
     if data_param['grid_search']:
-        lr, optim = grid_search(loader, train_param, data_param, loc_param)
+        lr, optim = grid_search(loader, train_param, data_param, loc_param, _run)
         train_param['lr'] = lr
         train_param['optim'] = optim
     
     _log.info('[{}]: created train and test datasets.'.format(ctime()))
     _log.info('[{}]: starting to train ...'.format(ctime()))
-    train(loader[0], loader[1], train_param, data_param, loc_param, _log)
+    train(loader[0], loader[1], train_param, data_param, loc_param, _log, _run)
     _log.info('[{}]: training is finished!'.format(ctime()))

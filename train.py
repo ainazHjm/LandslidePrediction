@@ -37,20 +37,17 @@ def validate(model, test_loader, data_param, train_param, _log):
                     continue
                 loss = criterion(prds[indices.unsqueeze(0)], gt[indices])                
             else:
-                if prds[indices.unsqueeze(1)].nelement() == 0:
+                if prds[indices].nelement() == 0:
                     ignore += 1
                     continue
-                loss = criterion(prds[indices.unsqueeze(1)], gt[indices])
+                loss = criterion(prds[indices], gt[indices])
             # import ipdb; ipdb.set_trace()
             running_loss += loss.item()
-        _log.info('ignored [{}/{}] when validating...'.format(
-            ignore,
-            data_param['div']['test'][0]*data_param['div']['test'][1]
-            )
-        )
+        del data, gt, prds, indices
+        _log.info('ignored [{}/{}] when validating...'.format(ignore, len(test_iter)))
         return running_loss/len(test_iter)
 
-def train(train_loader, test_loader, train_param, data_param, loc_param, _log):
+def train(train_loader, test_loader, train_param, data_param, loc_param, _log, _run):
     writer = SummaryWriter()
     model_dir, _ = create_dir(writer.file_writer.get_logdir())
     sig = nn.Sigmoid()
@@ -76,7 +73,7 @@ def train(train_loader, test_loader, train_param, data_param, loc_param, _log):
     else:
         optimizer = to.SGD(train_model.parameters(), lr=train_param['lr'], weight_decay=train_param['decay'])
     
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=train_param['patience'], verbose=True)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=train_param['patience'], verbose=True, factor=0.5)
     criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([train_param['pos_weight']]).cuda())
 
     loss_ = 0
@@ -98,16 +95,20 @@ def train(train_loader, test_loader, train_param, data_param, loc_param, _log):
                     continue
                 loss = criterion(prds[indices.unsqueeze(0)], gt[indices])                
             else:
-                if prds[indices.unsqueeze(1)].nelement() == 0:
+                if prds[indices].nelement() == 0:
                     ignore += 1
                     continue
-                loss = criterion(prds[indices.unsqueeze(1)], gt[indices])
+                loss = criterion(prds[indices], gt[indices])
 
             running_loss += loss.item()
             loss_ += loss.item()
             
             loss.backward()
             optimizer.step()
+
+            _run.log_scalar("training.loss_iter", loss.item(), epoch*len(train_iter)+iter_+1)
+            _run.log_scalar("training.max_prob", th.max(sig(prds)).item(), epoch*len(train_iter)+iter_+1)
+            _run.log_scalar("training.min_prob", th.min(sig(prds)).item(), epoch*len(train_iter)+iter_+1)
 
             writer.add_scalar("loss/train_iter", loss.item(), epoch*len(train_iter)+iter_+1)
             writer.add_scalars(
@@ -116,6 +117,7 @@ def train(train_loader, test_loader, train_param, data_param, loc_param, _log):
                 epoch*len(train_iter)+iter_+1
             )
             if (epoch*len(train_iter)+iter_+1) % 20 == 0:
+                _run.log_scalar("training.loss_20", loss_/20, epoch*len(train_iter)+iter_+1)
                 writer.add_scalar("loss/train_20", loss_/20, epoch*len(train_iter)+iter_+1)
                 _log.info(
                     '[{}] loss at [{}/{}]: {}'.format(
@@ -126,24 +128,22 @@ def train(train_loader, test_loader, train_param, data_param, loc_param, _log):
                     )
                 )
                 loss_ = 0
-            del prds, gt, data, indices
 
         if (epoch+1) % loc_param['save'] == 0:
             th.save(train_model, model_dir+'model_{}.pt'.format(str(epoch+1)))
         
+        del data, gt, prds, indices
         v_loss = validate(train_model, test_loader, data_param, train_param, _log)
         scheduler.step(v_loss)
         _log.info('[{}] validation loss at [{}/{}]: {}'.format(ctime(), epoch+1, train_param['n_epochs'], v_loss))
+        _run.log_scalar('training.val_loss', v_loss, epoch+1)
+        _run.log_scalar('training.loss_epoch', running_loss/len(train_iter), epoch+1)
         writer.add_scalars(
             "loss/grouped",
             {'test': v_loss, 'train': running_loss/len(train_iter)},
-            epoch
+            epoch+1
         )
-        _log.info('ignored [{}/{}] when training...'.format(
-            ignore,
-            data_param['div']['train'][0]*data_param['div']['train'][1]
-            )
-        )
+        _log.info('ignored [{}/{}] when training...'.format(ignore, len(train_iter)))
 
     writer.export_scalars_to_json(model_dir+'loss.json')
     th.save(train_model, model_dir+'trained_model.pt')
