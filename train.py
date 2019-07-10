@@ -106,7 +106,7 @@ def train(train_loader, test_loader, train_param, data_param, loc_param, _log, _
         _log.info('[{}]: [{}/{}] is ignored when validating.'.format(ctime(), ignore, len(train_iter)))
 
         if (epoch+1) % loc_param['save'] == 0:
-            th.save(train_model, model_dir+'model_{}.pt'.format(str(epoch+1)))
+            th.save(train_model.state_dict(), model_dir+'model_{}.pt'.format(str(epoch+1)))
         
         v_loss = validate(train_model, test_loader, data_param, train_param, _log)
         scheduler.step(v_loss)
@@ -120,6 +120,6 @@ def train(train_loader, test_loader, train_param, data_param, loc_param, _log, _
         )
 
     writer.export_scalars_to_json(model_dir+'loss.json')
-    th.save(train_model, model_dir+'trained_model.pt')
+    th.save(train_model.state_dict(), model_dir+'trained_model.pt')
     save_config(writer.file_writer.get_logdir()+'/config.txt', train_param, data_param)
     _log.info('[{}] model has been trained and config file has been saved.'.format(ctime()))

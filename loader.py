@@ -109,8 +109,8 @@ class SampledPixDataset(Dataset):
                 ],
                 'gt': f[self.region][self.data_flag]['gt'][
                     :,
-                    row+self.pad-(self.ws//2):row+self.pad+(self.ws//2),
-                    col+self.pad-(self.ws//2):col+self.pad+(self.ws//2)
+                    row-(self.ws//2):row+(self.ws//2),
+                    col-(self.ws//2):col+(self.ws//2)
                 ],
                 'index': (row, col)
             }
