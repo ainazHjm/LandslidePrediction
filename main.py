@@ -16,7 +16,7 @@ ex = Experiment('train_rotation')
 @ex.config
 def ex_cfg():
     train_param = {
-        'lr': 0.0001,
+        'lr': 0.005,
         'n_epochs': 100,
         'bs': 8,
         'decay': 1e-5,
@@ -38,7 +38,7 @@ def ex_cfg():
         'load_model': '',
         'data_path': '/media/ainaz/48F25DF3F25DE62A/data/rotated_landslide.h5',
         # 'save_model_to': '../models/CNN/',
-        'save': 10
+        'save': 4
     }
 
 @ex.automain
@@ -46,6 +46,15 @@ def main(train_param, data_param, loc_param, _log):
     data = []
     for flag in ['train', 'test']:
         data.append(RotDataset(loc_param['data_path'], data_param['region'], flag))
+        # data.append(
+        #     LandslideDataset(
+        #         loc_param['data_path'],
+        #         data_param['region'],
+        #         data_param['ws'],
+        #         flag,
+        #         data_param['pad']
+        #     )
+        # )
     loader = [DataLoader(d, batch_size=train_param['bs'], shuffle=True, num_workers=data_param['n_workers']) for d in data]
     
     _log.info('[{}]: created train and test datasets.'.format(ctime()))

@@ -7,6 +7,7 @@ from time import ctime
 from tensorboardX import SummaryWriter
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from utils.plot import save_config
+# from adjust_rotation import rad2deg, find_angle
 # pylint: disable=E1101,E0401,E1123
 
 def create_dir(dir_name):
@@ -21,7 +22,7 @@ def create_dir(dir_name):
 def validate(model, test_loader, train_param, data_param):
     with th.no_grad():
         criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([train_param['pos_weight']]).cuda())
-        running_loss = 0
+        running_loss, ignore = 0, 0
         test_iter = iter(test_loader)
         for _ in range(len(test_iter)):
             batch_sample = test_iter.next()
@@ -29,10 +30,11 @@ def validate(model, test_loader, train_param, data_param):
             prds = model.forward(data)[:, :, data_param['pad']:-data_param['pad'], data_param['pad']:-data_param['pad']]
             indices = gt >= 0
             if prds[indices].nelement() == 0:
+                ignore += 1
                 continue
             loss = criterion(prds[indices], gt[indices])
             running_loss += loss.item()
-        return running_loss/len(test_iter)
+        return running_loss/(len(test_iter)-ignore)
 
 def train(train_loader, test_loader, train_param, data_param, loc_param, _log):
     writer = SummaryWriter()
@@ -54,7 +56,7 @@ def train(train_loader, test_loader, train_param, data_param, loc_param, _log):
     
     loss_ = 0
     for epoch in range(train_param['n_epochs']):
-        running_loss = 0
+        running_loss, ignore = 0, 0
         train_iter = iter(train_loader)
         for iter_ in range(len(train_iter)):
             optimizer.zero_grad()
@@ -64,27 +66,27 @@ def train(train_loader, test_loader, train_param, data_param, loc_param, _log):
             prds = train_model.forward(data)[:, :, data_param['pad']:-data_param['pad'], data_param['pad']:-data_param['pad']]
             indices = gt >= 0
             if prds[indices].nelement() == 0:
+                ignore += 1
                 continue
             loss = criterion(prds[indices], gt[indices]) # check the loss value
-            # import ipdb; ipdb.set_trace()
             running_loss += loss.item()
             loss_ += loss.item()
             
             loss.backward()
             optimizer.step()
 
-            writer.add_scalar("loss/train_iter", loss.item(), epoch*len(train_iter)+iter_+1)
+            writer.add_scalar("loss/train_iter", loss.item(), epoch*len(train_iter)+iter_+1-ignore)
             writer.add_scalars(
                 "probRange",
                 {'min': th.min(sig(prds)), 'max': th.max(sig(prds))},
-                epoch*len(train_iter)+iter_+1
+                epoch*len(train_iter)+iter_+1-ignore
             )
-            if (epoch*len(train_iter)+iter_+1) % 20 == 0:
-                writer.add_scalar("loss/train_100", loss_/20, epoch*len(train_iter)+iter_+1)
+            if (epoch*len(train_iter)+iter_+1-ignore) % 20 == 0:
+                writer.add_scalar("loss/train_20", loss_/20, epoch*len(train_iter)+iter_+1-ignore)
                 _log.info(
                     '[{}] loss at [{}/{}]: {}'.format(
                         ctime(),
-                        epoch*len(train_iter)+iter_+1,
+                        epoch*len(train_iter)+iter_+1-ignore,
                         train_param['n_epochs']*len(train_iter),
                         loss_/20
                     )
@@ -97,13 +99,13 @@ def train(train_loader, test_loader, train_param, data_param, loc_param, _log):
         _log.info('[{}] validation loss at [{}/{}]: {}'.format(ctime(), epoch+1, train_param['n_epochs'], v_loss))
         writer.add_scalars(
             "loss/grouped",
-            {'test': v_loss, 'train': running_loss/len(train_iter)},
+            {'test': v_loss, 'train': running_loss/(len(train_iter)-ignore)},
             epoch
         )
         if (epoch+1) % loc_param['save'] == 0:
-            th.save(train_model, '{}model_at{}.pt'.format(model_dir, epoch))
+            th.save(train_model.state_dict(), '{}model_at{}.pt'.format(model_dir, epoch))
 
     writer.export_scalars_to_json(writer.file_writer.get_logdir()+'/loss.json')
-    th.save(train_model, '{}trained_model.pt'.format(model_dir))
+    th.save(train_model.state_dict(), '{}trained_model.pt'.format(model_dir))
     save_config(writer.file_writer.get_logdir()+'/config.txt', train_param, data_param)
     _log.info('[{}]: model has been trained and config file has been saved.'.format(ctime()))

@@ -15,7 +15,7 @@ def ex_cfg():
         'ws': 400,
         'pad': 64,
         'num_feature': 94,
-        'save_to': '/home/ainaz/Projects/Landslides/image_data/rotated_landslide.h5'
+        'save_to': '/home/ainaz/Projects/Landslides/image_data/rotated_landslide_new.h5'
     }
 
 def rad2deg(theta):
@@ -23,7 +23,7 @@ def rad2deg(theta):
 
 def find_angle(pc, pr):
     theta = np.arctan2(abs(pr[0]-pc[0]), abs(pr[1]-pc[1]))
-    return rad2deg(theta)
+    return 90-int(rad2deg(theta)) # only return the integer values
 
 def init_dataset(args, num_samples):
     f = h5py.File(args['save_to'], 'w')
@@ -50,18 +50,20 @@ def init_dataset(args, num_samples):
         )
     return f
 
-def write_dataset_iter(args, f, sample, angle, idx, data_flag='train'):
-    data = snd.rotate(sample['data'], angle, reshape=False) # TODO: check shape & type
-    gt = snd.rotate(sample['gt'], angle, reshape=False)
-    # import ipdb; ipdb.set_trace()
-    f[args['region']][data_flag]['data'][idx, :, :, :] = data
-    f[args['region']][data_flag]['gt'][idx, :, :, :] = gt
+def write_dataset_iter(args, f, sample, angle, idx, data_flag):
+    gt = sample['gt'][0, :, :]
+    rot_gt = snd.rotate(gt, angle, reshape=False)
+    f[args['region']][data_flag]['gt'][idx, 0, :, :] = rot_gt
     f[args['region']][data_flag]['index'][idx, :] = sample['index']
     f[args['region']][data_flag]['angle'][idx, :] = angle
+    for channel in range(sample['data'].shape[0]): # rotate for each channel
+        data = sample['data'][channel, :, :]
+        rot_data = snd.rotate(data, angle, reshape=False)
+        f[args['region']][data_flag]['data'][idx, channel, :, :] = rot_data
     return f
 
 @ex.capture
-def adjust_rot(args, f, dataset, data_flag, _log):
+def adjust_rot(args, f, dataset, data_flag, _log, _run):
     for idx in range(len(dataset)):
         sample = dataset[idx]
         (h, w) = sample['data'][0, :, :].shape
@@ -70,6 +72,7 @@ def adjust_rot(args, f, dataset, data_flag, _log):
         headpt = np.array([h//2, w//2])
         angle = find_angle(headpt, tailpt)
         _log.info('[{}][{}/{}] ---- angle: {} ---- '.format(ctime(), idx, len(dataset), angle))
+        _run.log_scalar('rotation_{}.angle'.format(data_flag), angle, idx)
         f = write_dataset_iter(args, f, sample, angle, idx, data_flag)
     _log.info('created the rotated dataset for {}'.format(data_flag))
     return f
