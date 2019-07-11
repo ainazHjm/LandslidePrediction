@@ -31,9 +31,9 @@ def ex_cfg():
     }
     loc_param = {
         'load_model': '',
-        'data_path': '/dev/shm/landslide_normalized.h5',
+        'data_path': '/tmp/landslide_normalized.h5',
         'sample_path': '../image_data/',
-        'save': 10
+        'save': 4
     }
 
 # def my_collate(batch):

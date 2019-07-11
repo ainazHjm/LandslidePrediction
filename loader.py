@@ -96,10 +96,10 @@ class SampledPixDataset(Dataset):
         self.data_flag = data_flag
 
     def __len__(self):
-        return len(self.indices)
+        return len(self.indices)//100
 
     def __getitem__(self, index):
-        row, col = self.indices[index][0], self.indices[index][1]
+        row, col = self.indices[index*100][0], self.indices[index*100][1]
         with h5py.File(self.data_path, 'r') as f:
             sample = {
                 'data': f[self.region][self.data_flag]['data'][
@@ -109,8 +109,8 @@ class SampledPixDataset(Dataset):
                 ],
                 'gt': f[self.region][self.data_flag]['gt'][
                     :,
-                    row+self.pad-(self.ws//2):row+self.pad+(self.ws//2),
-                    col+self.pad-(self.ws//2):col+self.pad+(self.ws//2)
+                    row-(self.ws//2):row+(self.ws//2),
+                    col-(self.ws//2):col+(self.ws//2)
                 ],
                 'index': (row, col)
             }
