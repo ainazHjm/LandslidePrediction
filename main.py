@@ -11,16 +11,16 @@ ex = Experiment('CNN_pixelwise')
 @ex.config
 def ex_cfg():
     train_param = {
-        'lr': 0.003,
+        'lr': 0.005,
         'n_epochs': 100,
-        'bs': 20,
+        'bs': 5,
         'decay': 1e-5,
         'patience': 2,
         'pos_weight': 2,
         'model': 'FCNwBottleneck'
     }
     data_param = {
-        'n_workers': 8,
+        'n_workers': 4,
         'region': 'Veneto',
         'pix_res': 10,
         'stride': 200,

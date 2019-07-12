@@ -103,7 +103,7 @@ def train(train_loader, test_loader, train_param, data_param, loc_param, _log, _
                 )
                 loss_ = 0
             del prds, gt, data
-        _log.info('[{}]: [{}/{}] is ignored when validating.'.format(ctime(), ignore, len(train_iter)))
+        _log.info('[{}]: [{}/{}] is ignored when training.'.format(ctime(), ignore, len(train_iter)))
 
         if (epoch+1) % loc_param['save'] == 0:
             th.save(train_model.state_dict(), model_dir+'model_{}.pt'.format(str(epoch+1)))

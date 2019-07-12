@@ -1,6 +1,7 @@
 import torch as th
 import torch.nn as nn
 import numpy as np
+import model
 from torchvision.utils import save_image
 from torch.utils.data import DataLoader
 from loader import LandslideDataset
@@ -15,14 +16,16 @@ def validate(params, test_loader, _log):
         shape = params['shape']
         res = th.zeros(shape)
         pad = params['pad']
-        model = th.load(params['load_model'])
+        if params['model'] == 'FCNwBottleneck':
+            trained_model = model.FCNwBottleneck(params['feature_num'], params['pix_res']).cuda()
+        trained_model.load_state_dict(th.load(params['load_model']))
         _log.info('[{}] model is successfully loaded.'.format(ctime()))
         test_iter = iter(test_loader)
         for iter_ in range(len(test_iter)):
             sample = test_iter.next()
             data, gt = sample['data'].cuda(), sample['gt'].cuda()
             ignore = gt < 0
-            prds = sig(model.forward(data))[:, :, pad:-pad, pad:-pad]
+            prds = sig(trained_model.forward(data))[:, :, pad:-pad, pad:-pad]
             prds[ignore] = 0
             del data, gt, ignore
             for idx in range(prds.shape[0]):
@@ -37,16 +40,19 @@ def validate(params, test_loader, _log):
 @ex.config
 def ex_cfg():
     params = {
-        'data_path': '/dev/shm/landslide_normalized.h5',
+        'data_path': '/tmp/landslide_normalized.h5',
         'load_model': '',
         'save_to': '',
         'region': 'Veneto',
-        'ws': 400,
-        'pad': 32,
+        'ws': 200,
+        'pad': 64,
         'shape': (4201, 19250),
-        'bs': 8,
-        'n_workers': 4,
+        'bs': 20,
+        'n_workers': 8,
         'flag': 'test',
+        'model': 'FCNwBottleneck',
+        'feature_num': 94,
+        'pix_res': 10
     }
 
 @ex.automain

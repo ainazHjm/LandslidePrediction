@@ -15,7 +15,7 @@ Image.MAX_IMAGE_PIXELS = 1000000000
 def get_args():
     parser = argparse.ArgumentParser(description="Data Preparation")
     parser.add_argument("--data_dir", action="append", type=str)
-    parser.add_argument("--name", type=str, default="landslide.h5")
+    parser.add_argument("--name", type=str, default="landslide_without_pad.h5")
     parser.add_argument("--save_to", type=str, default="../image_data/")
     parser.add_argument("--feature_num", type=int, default=94)
     parser.add_argument('--shape', action='append', type=args.shape)
@@ -35,7 +35,6 @@ def convert_nodata(np_img):
     nodata = 1-data
     mean = np.mean(np_img[data])
     np_img[nodata] = mean
-    # import ipdb; ipdb.set_trace()
     return np_img
 
 def normalize(np_img, f = 'slope'):
@@ -50,7 +49,6 @@ def normalize(np_img, f = 'slope'):
     return np_img
 
 def zero_one(np_img):
-    # ones = np_img==1
     ones = np_img!=0
     np_img[ones]=1
     return np_img
@@ -80,14 +78,14 @@ def process_data():
             if n == name and not name in f.keys():
                 f.create_dataset(
                     name+'/test/data',
-                    (args.feature_num, hv+args.pad*2, w+args.pad*2),
+                    (args.feature_num, hv+2*args.pad, w+2*args.pad),
                     dtype='f',
                     compression='lzf'
                 )
                 f.create_dataset(name+'/test/gt', (1, hv, w), dtype='f', compression='lzf')
                 f.create_dataset(
                     name+'/train/data',
-                    (args.feature_num, h-hv+args.pad*2, w+args.pad*2),
+                    (args.feature_num, h-hv+2*args.pad, w+2*args.pad),
                     dtype='f',
                     compression='lzf'
                 )
@@ -108,14 +106,14 @@ def process_data():
                     print('normalizing slope')
                     t = normalize(t, 'slope')
                 elif int(data_dict[n_]) == args.feature_num-1:
+                    print('normalizing DEM')
                     t = normalize(t, 'DEM')
-                # else:
-                #     # t = convert_nodata(zero_one(t))
-                #     t = zero_one(t)
                 print(data_dict[n_], type(data_dict[n_]))
                 hlen = t.shape[0]//5
-                f[name+'/train/data'][int(data_dict[n_])] = np.pad(np.concatenate((t[0:hlen, :], t[2*hlen:, :]), 0), args.pad, 'constant')
-                f[name+'/test/data'][int(data_dict[n_])] = np.pad(t[hlen:2*hlen, :], args.pad, 'constant')
+                f[name+'/train/data'][int(data_dict[n_])] = np.pad(np.concatenate((t[0:hlen, :], t[2*hlen:, :]), 0), args.pad, 'edge')
+                f[name+'/test/data'][int(data_dict[n_])] = np.pad(t[hlen:2*hlen, :], args.pad, 'edge')
+                # f[name+'/train/data'][int(data_dict[n_])] = np.concatenate((t[0:hlen, :], t[2*hlen:, :]), 0)
+                # f[name+'/test/data'][int(data_dict[n_])] = t[hlen:2*hlen, :]
         gt = np.array(Image.open(data_path+'gt'+args.data_format))
         hlen = gt.shape[0]//5
         f[name+'/train/gt'][0] = np.concatenate((gt[0:hlen, :], gt[2*hlen:, :]), 0)
