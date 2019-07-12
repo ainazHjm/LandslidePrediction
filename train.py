@@ -7,6 +7,7 @@ from time import ctime
 from tensorboardX import SummaryWriter
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from utils.plot import save_config
+from unet import UNet
 # pylint: disable=E1101,E0401,E1123
 
 def create_dir(dir_name):
@@ -31,16 +32,20 @@ def validate(model, test_loader, data_param, train_param, _log):
             gt = batch_sample['gt'].cuda()
             prds = model.forward(data)[:, :, pad:-pad, pad:-pad]
             indices = gt>=0
-            if train_param['bs'] == 1:
-                if prds[indices.unsqueeze(0)].nelement() == 0:
-                    ignore += 1
-                    continue
-                loss = criterion(prds[indices.unsqueeze(0)], gt[indices])                
-            else:
-                if prds[indices].nelement() == 0:
-                    ignore += 1
-                    continue
-                loss = criterion(prds[indices], gt[indices])
+            # if train_param['bs'] == 1:
+            #     if prds[indices.unsqueeze(0)].nelement() == 0:
+            #         ignore += 1
+            #         continue
+            #     loss = criterion(prds[indices.unsqueeze(0)], gt[indices])                
+            # else:
+            #     if prds[indices].nelement() == 0:
+            #         ignore += 1
+            #         continue
+            #     loss = criterion(prds[indices], gt[indices])
+            if prds[indices].nelement() == 0:
+                ignore += 1
+                continue
+            loss = criterion(prds[indices], gt[indices])
             # import ipdb; ipdb.set_trace()
             running_loss += loss.item()
         del data, gt, prds, indices
@@ -56,8 +61,8 @@ def train(train_loader, test_loader, train_param, data_param, loc_param, _log, _
         train_model = model.FCN(data_param['feature_num']).cuda()
     elif train_param['model'] == 'FCNwPool':
         train_model = model.FCNwPool(data_param['feature_num'], data_param['pix_res']).cuda()
-    elif train_param['model'] == 'UNET':
-        train_model = model.UNET(data_param['feature_num']).cuda()
+    elif train_param['model'] == 'UNet':
+        train_model = UNet(data_param['feature_num'], 1).cuda()
     elif train_param['model'] == 'FCNwBottleneck':
         train_model = model.FCNwBottleneck(data_param['feature_num'], data_param['pix_res']).cuda()
     
@@ -85,20 +90,16 @@ def train(train_loader, test_loader, train_param, data_param, loc_param, _log, _
             optimizer.zero_grad()
 
             batch_sample = train_iter.next()
-            # (_, _, h, w) = batch_sample['data'].shape
             data, gt = batch_sample['data'].cuda(), batch_sample['gt'].cuda()
-            prds = train_model.forward(data)[:, :, pad:-pad, pad:-pad]
-            indices = gt>=0
-            if train_param['bs'] == 1:
-                if prds[indices.unsqueeze(0)].nelement() == 0:
-                    ignore += 1
-                    continue
-                loss = criterion(prds[indices.unsqueeze(0)], gt[indices])                
+            if train_param['model'] == 'UNET':
+                prds = train_model(data)[:, :, pad:-pad, pad:-pad]
             else:
-                if prds[indices].nelement() == 0:
-                    ignore += 1
-                    continue
-                loss = criterion(prds[indices], gt[indices])
+                prds = train_model.forward(data)[:, :, pad:-pad, pad:-pad]
+            indices = gt>=0
+            if prds[indices].nelement() == 0:
+                ignore += 1
+                continue
+            loss = criterion(prds[indices], gt[indices])
 
             running_loss += loss.item()
             loss_ += loss.item()

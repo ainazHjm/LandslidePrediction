@@ -6,15 +6,15 @@ from time import ctime
 from sacred import Experiment
 # from sacred.observers import MongoObserver
 
-ex = Experiment('CNNLargePatch')
+ex = Experiment('CNNPatch')
 
 @ex.config
 def ex_cfg():
     train_param = {
-        'optim': 'Adam',
-        'lr': 0.0001,
+        'optim': 'SGD',
+        'lr': 0.005,
         'n_epochs': 100,
-        'bs': 8,
+        'bs': 5,
         'decay': 1e-5,
         'patience': 2,
         'pos_weight': 2,
@@ -26,8 +26,8 @@ def ex_cfg():
         'n_workers': 4,
         'region': 'Veneto',
         'pix_res': 10,
-        'stride': 400,
-        'ws': 400,
+        'stride': 200,
+        'ws': 200,
         'pad': 64,
         'feature_num': 94,
         'oversample': False
@@ -36,7 +36,7 @@ def ex_cfg():
         'load_model': '',
         'data_path': '/dev/shm/landslide_normalized.h5',
         'sample_path': '../image_data/',
-        'save': 10
+        'save': 2
     }
 
 def plot_grid(x, y):
@@ -47,6 +47,7 @@ def plot_grid(x, y):
     plt.scatter(x, y['SGD'], c='r')
     plt.show()
 
+@ex.capture
 def grid_search(loader, train_param, data_param, loc_param, _log, _run):
     n_train_param = train_param
     n_train_param['n_epochs'] = 1
@@ -92,7 +93,7 @@ def main(train_param, data_param, loc_param, _log, _run):
     loader = [DataLoader(d, batch_size=train_param['bs'], shuffle=True, num_workers=data_param['n_workers']) for d in data]
     # import ipdb; ipdb.set_trace()
     if data_param['grid_search']:
-        lr, optim = grid_search(loader, train_param, data_param, loc_param, _run)
+        lr, optim = grid_search(loader, train_param, data_param, loc_param)
         train_param['lr'] = lr
         train_param['optim'] = optim
     

@@ -41,11 +41,11 @@ def ex_cfg():
         'load_model': '',
         'save_to': '',
         'region': 'Veneto',
-        'ws': 400,
+        'ws': 200,
         'pad': 64,
         'shape': (4201, 19250),
-        'bs': 5,
-        'n_workers': 4,
+        'bs': 20,
+        'n_workers': 8,
         'flag': 'test',
     }
 
