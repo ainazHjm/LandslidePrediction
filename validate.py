@@ -25,8 +25,8 @@ def validate(params, test_loader, _log):
         #     n_state[n_s] = v
         if params['model'] == 'FCNwBottleneck':
             model = FCNwBottleneck(params['num_feature'], params['pix_res']).cuda()
-        if th.cuda.device_count() > 1:
-            model = nn.DataParallel(model)
+        # if th.cuda.device_count() > 1:
+        model = nn.DataParallel(model)
         # import ipdb; ipdb.set_trace()
         model.load_state_dict(th.load(params['load_model']))
         _log.info('[{}] model is successfully loaded.'.format(ctime()))
@@ -39,7 +39,7 @@ def validate(params, test_loader, _log):
             prds[ignore] = 0
             del data, gt, ignore
             for idx in range(prds.shape[0]):
-                row, col = int(sample['index'][0][idx].item()), int(sample['index'][1][idx].item())
+                row, col = int(sample['index'][idx, 0].item()), int(sample['index'][idx, 1].item())
                 res[row*params['ws']:(row+1)*params['ws'], col*params['ws']:(col+1)*params['ws']] = prds[idx, 0, :, :]
             _log.info('[{}]: writing [{}/{}]'.format(ctime(), iter_, len(test_iter)))
         _log.info('all images are written!')

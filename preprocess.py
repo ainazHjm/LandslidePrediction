@@ -40,7 +40,9 @@ def normalize(np_img, f = 'slope'):
         np_img[np_img > 180] = 0
     mean = np.mean(np_img)
     std = np.std(np_img)
+    print('mean, std before normalizing: %f, %f' %(mean, std))
     np_img = (np_img - mean)/std
+    print('after: %f, %f' %(np.mean(np_img), np.std(np_img)))
     return np_img
 
 def zero_one(np_img):
@@ -70,22 +72,23 @@ def process_data():
     for data_path in args.data_dir:
         name = data_path.split('/')[-2]
         for n, h, w in args.shape:
-            hv = h//5
+            # hv = h//5
+            nw = w//3
             if n == name and not name in f.keys():
                 f.create_dataset(
                     name+'/test/data',
-                    (args.feature_num, hv+args.pad*2, w+args.pad*2),
+                    (args.feature_num, h+args.pad*2, w-2*nw+args.pad*2),
                     dtype='f',
                     compression='lzf'
                 )
-                f.create_dataset(name+'/test/gt', (1, hv, w), dtype='f', compression='lzf')
+                f.create_dataset(name+'/test/gt', (1, h+args.pad*2, w-2*nw+args.pad*2), dtype='f', compression='lzf')
                 f.create_dataset(
                     name+'/train/data',
-                    (args.feature_num, h-hv+args.pad*2, w+args.pad*2),
+                    (args.feature_num, h+args.pad*2, nw*2+args.pad*2),
                     dtype='f',
                     compression='lzf'
                 )
-                f.create_dataset(name+'/train/gt', (1, h-hv, w), dtype='f', compression='lzf')
+                f.create_dataset(name+'/train/gt', (1, h+args.pad*2, nw*2+args.pad*2), dtype='f', compression='lzf')
                 print('created data and gt in %s' %name)
                 break
         f = initialize(f, name)
@@ -98,22 +101,18 @@ def process_data():
             if args.data_format in img and not '.xml' in img and not 'gt' in img:
                 t = np.array(Image.open(data_path+img))
                 n_ = img.split('.')[0]
-                if data_dict[n_] == 0:
+                if int(data_dict[n_]) == 0:
                     t = normalize(t, 'slope')
-                elif data_dict[n_] == args.feature_num-1:
+                elif int(data_dict[n_]) == args.feature_num-1:
                     t = normalize(t, 'DEM')
-                else:
-                    # t = convert_nodata(zero_one(t))
-                    t = zero_one(t)
                 print(data_dict[n_])
-                hlen = t.shape[0]//5
-                f[name+'/train/data'][int(data_dict[n_])] = np.pad(np.concatenate((t[0:hlen, :], t[2*hlen:, :]), 0), args.pad, 'constant')
-                f[name+'/test/data'][int(data_dict[n_])] = np.pad(t[hlen:2*hlen, :], args.pad, 'constant')
+                wlen = t.shape[1]//3
+                f[name+'/train/data'][int(data_dict[n_])] = np.pad(t[:, 0:2*wlen], args.pad, 'edge')
+                f[name+'/test/data'][int(data_dict[n_])] = np.pad(t[:, 2*wlen:], args.pad, 'edge')
         gt = np.array(Image.open(data_path+'gt'+args.data_format))
-        gt = zero_one(gt)
-        hlen = gt.shape[0]//5
-        f[name+'/train/gt'][0] = np.concatenate((gt[0:hlen, :], gt[2*hlen:, :]), 0)
-        f[name+'/test/gt'][0] = gt[hlen:2*hlen, :]
+        wlen = gt.shape[1]//3
+        f[name+'/train/gt'][0] = np.pad(gt[:, 0:2*wlen], args.pad, 'edge')
+        f[name+'/test/gt'][0] = np.pad(gt[:, 2*wlen:], args.pad, 'edge')
 
     f.close()
 

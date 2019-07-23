@@ -38,7 +38,7 @@ def ex_cfg():
         'load_model': '',
         'data_path': '/media/ainaz/48F25DF3F25DE62A/data/rotated_landslide.h5',
         # 'save_model_to': '../models/CNN/',
-        'save': 4
+        'save': 2
     }
 
 @ex.automain
