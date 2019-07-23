@@ -51,8 +51,10 @@ def load_slopeFiles(params, data_flag, _log):
             n_shape = find_nshape(deg2rad(angle), data.shape)
             f.create_dataset(str(angle), n_shape, dtype='f', compression='lzf')
             f[str(angle)][:, :] = rotate(data, angle, reshape=True, mode='reflect')
+            _log.info('{}: writing slope with angle {}'.format(ctime, str(angle)))
     else:
         f = h5py.File(path, 'r')
+        _log.info('{}: slope datasets are read'.format(ctime()))
     return f
 
 def initialize_dataset(f, shape, data_flag, params):
