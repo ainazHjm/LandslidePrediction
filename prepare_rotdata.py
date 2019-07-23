@@ -3,6 +3,7 @@ import h5py
 from sacred import Experiment
 from PIL import Image
 from scipy.ndimage import rotate
+from time import ctime
 
 Image.MAX_IMAGE_PIXELS=1e10
 ex = Experiment()
@@ -13,10 +14,10 @@ def config():
         'ws': 100,
         'slope_dist': 640,
         'angle_step': 15,
-        'image_path': '../image_data/...',
+        'image_path': '/home/ainaz/Projects/Landslides/image_data/Veneto_NEW/data/Veneto/',
         'data_path': '../image_data/n_dataset_oldgt.h5',
         'feature_num': 94,
-        'save_to': '../image_data/rot_landslide.h5',
+        'save_to': '../image_data/rot_landslide_.h5',
         'region': 'Veneto',
         'pad': 64
     }
@@ -121,13 +122,17 @@ def my_rotate(params, angle, target_shape, index, flag):
 @ex.automain
 def find_angles(params, _log):
     f = h5py.File(params['save_to'], 'w')
+    _log.info('{}: prepared the dataset for writing'.format(ctime()))
     for flag in ['train', 'test']:
         slope_array = load_slopeFiles(params)
+        _log.info('{}: slope files are loaded for {}'.format(ctime(), flag))
         (h, w) = slope_array['0'].shape
         hnum, wnum = h//params['ws'], w//params['ws']
         rot_ws = find_maxws(params)
         n_h, n_w = rot_ws*hnum, rot_ws*wnum
+        _log.info('{}: new shape -> ({}, {}), old shape -> ({}, {}), maximum ws -> {}'.format(ctime(), n_h, n_w, h, w, rot_ws))
         f = initialize_dataset(f, (n_h, n_w), flag, params)
+        _log.info('{}: {} dataset is initialized with zeros'.format(ctime(), flag))
         for row in range(hnum):   
             for col in range(wnum):
                 pt_value = slope_array[0][
@@ -152,6 +157,7 @@ def find_angles(params, _log):
                     if dist_value > pt_value:
                         best_angle = angle
                         break
+                _log.info('{}: best angle = {} with slope = {} > {}'.format(ctime(), str(best_angle), str(dist_value), str(pt_value)))
                 rot_data, rot_gt = my_rotate(params, best_angle, (rot_ws, rot_ws), (row, col), flag)
                 f[params['region']][flag]['data'][
                     :,
@@ -163,12 +169,13 @@ def find_angles(params, _log):
                     row*rot_ws:(row+1)*rot_ws,
                     col*rot_ws:(col+1)*rot_ws
                 ] = rot_gt
-                _log.info('writing patch [({}, {})]/[({}, {})] in {}'.format(
+                _log.info('{}: writing patch [({}, {})]/[({}, {})] in {}'.format(
+                    ctime(),
                     str(row),
                     str(col),
                     str(hnum),
                     str(wnum),
                     flag
                 ))
-    _log.info('dataset is written. closing the file ...')
+    _log.info('{}: dataset is written. closing the file ...'.format(ctime()))
     f.close()
