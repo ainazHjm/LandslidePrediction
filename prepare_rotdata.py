@@ -19,7 +19,8 @@ def config():
         'feature_num': 94,
         'save_to': '../image_data/rot_landslide_.h5',
         'region': 'Veneto',
-        'pad': 64
+        'pad': 64,
+        'write_slope_files': False,
     }
 
 def find_maxws(params):
@@ -33,21 +34,26 @@ def normalize(data):
     data = (data-mean)/std
     return data
 
-def load_slopeFiles(params, data_flag='train'):
-    slope = np.array(Image.open(params['image_path']+'slope.tif'))
-    slope = normalize(slope)
-    (h, w) = slope.shape
-    if data_flag == 'train':
-        data = slope[:, 0:2*(w//3)]
+def load_slopeFiles(params, data_flag, _log):
+    path = ('/').join(params['save_to'].split('/')[:-1])+'/{}_rotslopes.h5'
+    write = params['write_slope_files']
+    if write:
+        slope = np.array(Image.open(params['image_path']+'slope.tif'))
+        slope = normalize(slope)
+        _log.info('{}: slope is loaded and normalized'.format(ctime()))
+        (h, w) = slope.shape
+        if data_flag == 'train':
+            data = slope[:, 0:2*(w//3)]
+        else:
+            data = slope[:, 2*(w//3):]
+        f = h5py.File(path, 'w')
+        for angle in np.arange(0, 360, params['angle_step']):
+            n_shape = find_nshape(deg2rad(angle), data.shape)
+            f.create_dataset(str(angle), n_shape, dtype='f', compression='lzf')
+            f[str(angle)][:, :] = rotate(data, angle, reshape=True, mode='reflect')
     else:
-        data = slope[:, 2*(w//3):]
-    slope_array = {}
-    slope_array['0'] = data
-    for angle in np.arange(params['angle_step'], 360, params['angle_step']):
-        # rot = rotate(slope, angle, reshape=True, mode='nearest')
-        rot = rotate(data, angle, reshape=True, mode='reflect')
-        slope_array[str(angle)] = rot
-    return slope_array
+        f = h5py.File(path, 'r')
+    return f
 
 def initialize_dataset(f, shape, data_flag, params):
     (h, w) = shape
@@ -92,7 +98,7 @@ def find_rotated_coord(point, theta, scale, c_coord, prev_shape):
 def my_rotate(params, angle, target_shape, index, flag):
     f = h5py.File(params['data_path'], 'r')
     (row, col) = index
-    (nh, nw) = find_nshape(angle, (params['ws'], params['ws']))
+    (nh, nw) = find_nshape(deg2rad(angle), (params['ws'], params['ws']))
     rot_data = np.zeros((params['feature_num'], target_shape[0], target_shape[1]))
     dif_h = target_shape[0]-nh
     dif_w = target_shape[1]-nw
@@ -124,9 +130,8 @@ def find_angles(params, _log):
     f = h5py.File(params['save_to'], 'w')
     _log.info('{}: prepared the dataset for writing'.format(ctime()))
     for flag in ['train', 'test']:
-        slope_array = load_slopeFiles(params)
-        _log.info('{}: slope files are loaded for {}'.format(ctime(), flag))
-        (h, w) = slope_array['0'].shape
+        s_f = load_slopeFiles(params, flag, _log)
+        (h, w) = s_f['0'].shape
         hnum, wnum = h//params['ws'], w//params['ws']
         rot_ws = find_maxws(params)
         n_h, n_w = rot_ws*hnum, rot_ws*wnum
@@ -135,7 +140,7 @@ def find_angles(params, _log):
         _log.info('{}: {} dataset is initialized with zeros'.format(ctime(), flag))
         for row in range(hnum):   
             for col in range(wnum):
-                pt_value = slope_array[0][
+                pt_value = s_f[0][
                     row*params['ws']:(row+1)*params['ws'],
                     col*params['ws']:(col+1)*params['ws']
                     ][
@@ -145,15 +150,14 @@ def find_angles(params, _log):
                 center_coord = (h//2, w//2)
                 best_angle = 0
                 angle = 0
-                for idx in range(1, len(slope_array)):
-                    angle += params['angle_step']
+                for angle in np.arange(params['angle_step'], 360, params['angle_step']):
                     rot_coord = find_rotated_coord(pt_coord, angle, 1, center_coord, (h, w))
-                    rot_value = slope_array[idx][rot_coord[0], rot_coord[1]]
+                    rot_value = s_f[str(angle)][rot_coord[0], rot_coord[1]]
                     if rot_value != pt_value:
                         print('the values for the rotated image and the original image are not matching.')
                         raise ValueError
                     d = params['slope_dist']
-                    dist_value = slope_array[idx][rot_coord[0]-d, rot_coord[1]]
+                    dist_value = s_f[str(angle)][rot_coord[0]-d, rot_coord[1]]
                     if dist_value > pt_value:
                         best_angle = angle
                         break
