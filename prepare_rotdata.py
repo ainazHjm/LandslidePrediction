@@ -4,7 +4,7 @@ from sacred import Experiment
 from PIL import Image
 from scipy.ndimage import rotate
 
-Image.MAX_IMAGE_PIXELS=1e7
+Image.MAX_IMAGE_PIXELS=1e10
 ex = Experiment()
 
 @ex.config
@@ -57,9 +57,9 @@ def initialize_dataset(f, shape, data_flag, params):
     )
     f.create_dataset('{}/{}/gt'.format(params['region'], data_flag), (1, h, w), compression='lzf')
     
-    zero_train = np.zeros((h, w))
+    zero_data = np.zeros((h, w))
     for idx in range(params['feature_num']):
-        f['{}/{}/data'.format(params['region'], data_flag)][idx, :, :] = zero_train
+        f['{}/{}/data'.format(params['region'], data_flag)][idx, :, :] = zero_data
     return f
 
 def deg2rad(theta):
@@ -93,18 +93,32 @@ def my_rotate(params, angle, target_shape, index, flag):
     (row, col) = index
     (nh, nw) = find_nshape(angle, (params['ws'], params['ws']))
     rot_data = np.zeros((params['feature_num'], target_shape[0], target_shape[1]))
+    dif_h = target_shape[0]-nh
+    dif_w = target_shape[1]-nw
     for channel in range(params['feature_num']):
-        data = f[params['region']][flag]['data'][:, row*params['ws']][channel, :, :]
-        dif_h = target_shape[0]-nh
-        dif_w = target_shape[1]-nw
+        data = f[params['region']][flag]['data'][
+            channel,
+            row*params['ws']:(row+1)*params['ws'],
+            col*params['ws']:(col+1)*params['ws']
+        ]
         rot_data[channel, :, :] = np.pad(
             rotate(data, angle, reshape=True, mode='reflect'),
             ((dif_h//2, dif_h-dif_h//2), (dif_w//2, dif_w-dif_w//2)),
             mode='edge'
         )
-    return 
+    gt = f[params['region']][flag]['gt'][
+            0,
+            row*params['ws']:(row+1)*params['ws'],
+            col*params['ws']:(col+1)*params['ws']
+    ]
+    rot_gt = np.pad(
+        rotate(gt, angle, reshape=True, mode='reflect'),
+        ((dif_h//2, dif_h-dif_h//2), (dif_w//2, dif_w-dif_w//2)),
+        mode='edge'
+    )
+    return rot_data, rot_gt
 
-
+@ex.automain
 def find_angles(params, _log):
     f = h5py.File(params['save_to'], 'w')
     for flag in ['train', 'test']:
@@ -138,10 +152,23 @@ def find_angles(params, _log):
                     if dist_value > pt_value:
                         best_angle = angle
                         break
-                
-
-                    
-            
-        
-
-
+                rot_data, rot_gt = my_rotate(params, best_angle, (rot_ws, rot_ws), (row, col), flag)
+                f[params['region']][flag]['data'][
+                    :,
+                    row*rot_ws:(row+1)*rot_ws,
+                    col*rot_ws:(col+1)*rot_ws
+                ] = rot_data
+                f[params['region']][flag]['gt'][
+                    :,
+                    row*rot_ws:(row+1)*rot_ws,
+                    col*rot_ws:(col+1)*rot_ws
+                ] = rot_gt
+                _log.info('writing patch [({}, {})]/[({}, {})] in {}'.format(
+                    str(row),
+                    str(col),
+                    str(hnum),
+                    str(wnum),
+                    flag
+                ))
+    _log.info('dataset is written. closing the file ...')
+    f.close()
