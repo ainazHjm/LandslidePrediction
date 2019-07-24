@@ -27,26 +27,14 @@ def validate(model, test_loader, data_param, train_param, _log):
         pad = data_param['pad']
         for _ in range(len(test_iter)):
             batch_sample = test_iter.next()
-            # (_, _, h, w) = batch_sample['data'].shape
             data = batch_sample['data'].cuda()
             gt = batch_sample['gt'].cuda()
             prds = model.forward(data)[:, :, pad:-pad, pad:-pad]
             indices = gt>=0
-            # if train_param['bs'] == 1:
-            #     if prds[indices.unsqueeze(0)].nelement() == 0:
-            #         ignore += 1
-            #         continue
-            #     loss = criterion(prds[indices.unsqueeze(0)], gt[indices])                
-            # else:
-            #     if prds[indices].nelement() == 0:
-            #         ignore += 1
-            #         continue
-            #     loss = criterion(prds[indices], gt[indices])
             if prds[indices].nelement() == 0:
                 ignore += 1
                 continue
             loss = criterion(prds[indices], gt[indices])
-            # import ipdb; ipdb.set_trace()
             running_loss += loss.item()
         del data, gt, prds, indices
         _log.info('ignored [{}/{}] when validating...'.format(ignore, len(test_iter)))
@@ -131,7 +119,7 @@ def train(train_loader, test_loader, train_param, data_param, loc_param, _log, _
                 loss_ = 0
 
         if (epoch+1) % loc_param['save'] == 0:
-            th.save(train_model, model_dir+'model_{}.pt'.format(str(epoch+1)))
+            th.save(train_model.state_dict(), model_dir+'model_{}.pt'.format(str(epoch+1)))
         
         del data, gt, prds, indices
         v_loss = validate(train_model, test_loader, data_param, train_param, _log)
@@ -147,7 +135,7 @@ def train(train_loader, test_loader, train_param, data_param, loc_param, _log, _
         _log.info('ignored [{}/{}] when training...'.format(ignore, len(train_iter)))
 
     writer.export_scalars_to_json(model_dir+'loss.json')
-    th.save(train_model, model_dir+'trained_model.pt')
+    th.save(train_model.state_dict(), model_dir+'trained_model.pt')
     save_config(writer.file_writer.get_logdir()+'/config.txt', train_param, data_param)
     _log.info('[{}] model has been trained and config file has been saved.'.format(ctime()))
     

@@ -47,7 +47,7 @@ def ex_cfg():
         'region': 'Veneto',
         'ws': 200,
         'pad': 64,
-        'shape': (4201, 19250),
+        'shape': (21005, 6416),
         'bs': 20,
         'n_workers': 8,
         'flag': 'test',

@@ -12,13 +12,13 @@ ex = Experiment('CNNPatch')
 def ex_cfg():
     train_param = {
         'optim': 'SGD',
-        'lr': 0.005,
+        'lr': 0.0001,
         'n_epochs': 100,
-        'bs': 5,
+        'bs': 8,
         'decay': 1e-5,
         'patience': 2,
-        'pos_weight': 2,
-        'model': 'FCNwBottleneck'
+        'pos_weight': 5,
+        'model': 'UNet'
     }
     data_param = {
         'grid_search': False,
@@ -36,7 +36,7 @@ def ex_cfg():
         'load_model': '',
         'data_path': '/dev/shm/landslide_normalized.h5',
         'sample_path': '../image_data/',
-        'save': 2
+        'save': 10
     }
 
 def plot_grid(x, y):
@@ -75,13 +75,6 @@ def main(train_param, data_param, loc_param, _log, _run):
     data = []
     for flag in ['train', 'test']:
         data.append(
-            # LargeSample(
-            #     loc_param['data_path'],
-            #     data_param['region'],
-            #     data_param['pad'],
-            #     flag,
-            #     data_param['div'][flag]
-            # )
             LandslideDataset(
                 loc_param['data_path'],
                 data_param['region'],
@@ -91,7 +84,6 @@ def main(train_param, data_param, loc_param, _log, _run):
             )
         )
     loader = [DataLoader(d, batch_size=train_param['bs'], shuffle=True, num_workers=data_param['n_workers']) for d in data]
-    # import ipdb; ipdb.set_trace()
     if data_param['grid_search']:
         lr, optim = grid_search(loader, train_param, data_param, loc_param)
         train_param['lr'] = lr

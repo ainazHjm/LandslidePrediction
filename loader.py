@@ -196,8 +196,8 @@ class LandslideDataset(Dataset):
     def __len__(self):
         with h5py.File(self.path, 'r') as f:
             (_, h, w) = f[self.region][self.data_flag]['gt'].shape
-            hnum = h//self.ws
-            wnum = w//self.ws
+            hnum = (h-2*self.pad)//self.ws
+            wnum = (w-2*self.pad)//self.ws
             return hnum*wnum
     
     def __getitem__(self, index):
@@ -205,7 +205,7 @@ class LandslideDataset(Dataset):
             dataset = f[self.region][self.data_flag]['data']
             gt = f[self.region][self.data_flag]['gt']
             (_, _, wlen) = gt.shape
-            wnum = wlen//self.ws
+            wnum = (wlen-2*self.pad)//self.ws
             row = index//wnum
             col = index - row*wnum
             sample = {
@@ -219,8 +219,8 @@ class LandslideDataset(Dataset):
                 'gt': th.tensor(
                     gt[
                         :,
-                        row*self.ws:(row+1)*self.ws,
-                        col*self.ws:(col+1)*self.ws
+                        row*self.ws+self.pad:(row+1)*self.ws+self.pad,
+                        col*self.ws+self.pad:(col+1)*self.ws+self.pad
                     ]
                 ),
                 'index': (row, col)
