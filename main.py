@@ -14,7 +14,7 @@ def ex_cfg():
         'optim': 'SGD',
         'lr': 0.0001,
         'n_epochs': 100,
-        'bs': 3,
+        'bs': 4,
         'decay': 1e-5,
         'patience': 2,
         'pos_weight': 1,
@@ -23,7 +23,7 @@ def ex_cfg():
     data_param = {
         'grid_search': False,
         # 'div': {'train': (20,20), 'test': (4,20)},
-        'n_workers': 2,
+        'n_workers': 4,
         'region': 'Veneto',
         'pix_res': 10,
         'stride': 500,
@@ -37,7 +37,7 @@ def ex_cfg():
         'load_model': '',
         'data_path': '/tmp/Veneto_data.h5',
         'index_path': '/home/ainaz/Projects/Landslides/image_data/new_partitioning/',
-        'save': 10
+        'save': 20
     }
 
 def plot_grid(x, y):
