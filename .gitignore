@@ -8,6 +8,7 @@ nohup.out
 *.jpg
 *.tif
 *.yml
+*.sh
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

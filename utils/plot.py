@@ -7,33 +7,6 @@ from torch.nn import Sigmoid
 from time import ctime
 from PIL import Image
 from torchvision.utils import save_image
-# from sklearn.manifold import TSNE
-
-# def embed(data):
-#     (c, h, w) = data.shape
-#     X = data.reshape((h*w, c))
-#     X_transformed = TSNE(n_components=2).fit_transform(X)
-#     fig = plt.figure()
-#     fig.add_subplot(1,1,1)
-#     plt.scatter(X_transformed[:,0], X_transformed[:,1])
-#     plt.show()
-
-# def visualize(data_path, sample_path, region='Veneto', pad=32):
-#     from loader import SampledPixDataset
-#     dataset = SampledPixDataset(data_path, sample_path+'train_data.npy', region, pad, 'train')
-#     idx = np.random.choice(np.arange(len(dataset)), 1)
-#     data = dataset[idx[0]]['data']
-#     gt = np.zeros((200, 200))
-#     gt[100, 100] = dataset[idx[0]]['gt']
-#     fig = plt.figure(figsize=(65, 65))
-#     for i in range(1, 96):
-#         fig.add_subplot(5, 19, i)
-#         if i == 95:
-#             plt.imshow(gt)    
-#         else:
-#             plt.imshow(data[i-1, :, :])
-#     plt.show()
-#     # embed(data)
 
 def unite_imgs(data_path, orig_shape, ws):
     (h, w) = orig_shape
