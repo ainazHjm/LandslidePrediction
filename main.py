@@ -14,28 +14,29 @@ def ex_cfg():
         'optim': 'SGD',
         'lr': 0.0001,
         'n_epochs': 100,
-        'bs': 8,
+        'bs': 3,
         'decay': 1e-5,
         'patience': 2,
-        'pos_weight': 5,
+        'pos_weight': 1,
         'model': 'UNet'
     }
     data_param = {
         'grid_search': False,
         # 'div': {'train': (20,20), 'test': (4,20)},
-        'n_workers': 4,
+        'n_workers': 2,
         'region': 'Veneto',
         'pix_res': 10,
-        'stride': 200,
-        'ws': 200,
+        'stride': 500,
+        'ws': 500,
         'pad': 64,
         'feature_num': 94,
-        'oversample': False
+        'oversample': False,
+        'prune': 64
     }
     loc_param = {
         'load_model': '',
-        'data_path': '/dev/shm/landslide_normalized.h5',
-        'sample_path': '../image_data/',
+        'data_path': '/tmp/Veneto_data.h5',
+        'index_path': '/home/ainaz/Projects/Landslides/image_data/new_partitioning/',
         'save': 10
     }
 
@@ -70,26 +71,25 @@ def grid_search(loader, train_param, data_param, loc_param, _log, _run):
 
 @ex.automain
 def main(train_param, data_param, loc_param, _log, _run):
-    '''
-    '''
     data = []
-    for flag in ['train', 'test']:
+    for flag in ['train', 'validation']:
         data.append(
             LandslideDataset(
                 loc_param['data_path'],
+                loc_param['index_path']+'{}_{}_indices.npy'.format(data_param['region'], flag),
                 data_param['region'],
                 data_param['ws'],
-                flag,
-                data_param['pad']
+                data_param['pad'],
+                data_param['prune']
             )
         )
     loader = [DataLoader(d, batch_size=train_param['bs'], shuffle=True, num_workers=data_param['n_workers']) for d in data]
-    if data_param['grid_search']:
-        lr, optim = grid_search(loader, train_param, data_param, loc_param)
-        train_param['lr'] = lr
-        train_param['optim'] = optim
+    # if data_param['grid_search']:
+    #     lr, optim = grid_search(loader, train_param, data_param, loc_param)
+    #     train_param['lr'] = lr
+    #     train_param['optim'] = optim
     
-    _log.info('[{}]: created train and test datasets.'.format(ctime()))
+    _log.info('[{}]: created train and validation datasets.'.format(ctime()))
     _log.info('[{}]: starting to train ...'.format(ctime()))
     train(loader[0], loader[1], train_param, data_param, loc_param, _log, _run)
     _log.info('[{}]: training is finished!'.format(ctime()))

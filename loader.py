@@ -185,42 +185,35 @@ class LandslideDataset(Dataset):
     When testing, we don't need to have stride smaller than ws.
     Also, we don't need to oversample.
     '''
-    def __init__(self, path, region, ws, data_flag, pad=64):
+    def __init__(self, data_path, index_path, region, ws, pad, prune):
         super(LandslideDataset, self).__init__()
-        self.path = path
+        self.indices = np.load(index_path) # validation and train indices should be handled in the indices path
+        self.data_path = data_path
         self.ws = ws
         self.region = region
         self.pad = pad
-        self.data_flag = data_flag
+        self.prune = prune
 
     def __len__(self):
-        with h5py.File(self.path, 'r') as f:
-            (_, h, w) = f[self.region][self.data_flag]['gt'].shape
-            hnum = (h-2*self.pad)//self.ws
-            wnum = (w-2*self.pad)//self.ws
-            return hnum*wnum
+        return self.indices.shape[0]
     
     def __getitem__(self, index):
-        with h5py.File(self.path, 'r') as f:
-            dataset = f[self.region][self.data_flag]['data']
-            gt = f[self.region][self.data_flag]['gt']
-            (_, _, wlen) = gt.shape
-            wnum = (wlen-2*self.pad)//self.ws
-            row = index//wnum
-            col = index - row*wnum
+        with h5py.File(self.data_path, 'r') as f:
+            entry = self.indices[index, :]
+            row, col = int(entry[0]), int(entry[1])
             sample = {
                 'data': th.tensor(
-                    dataset[
+                    f[self.region]['data'][
                         :,
-                        row*self.ws:(row+1)*self.ws+2*self.pad,
-                        col*self.ws:(col+1)*self.ws+2*self.pad
+                        row*self.ws+self.pad-self.prune:(row+1)*self.ws+self.pad+self.prune,
+                        col*self.ws+self.pad-self.prune:(col+1)*self.ws+self.pad+self.prune
                     ]
                 ),
                 'gt': th.tensor(
-                    gt[
+                    f[self.region]['gt'][
                         :,
-                        row*self.ws+self.pad:(row+1)*self.ws+self.pad,
-                        col*self.ws+self.pad:(col+1)*self.ws+self.pad
+                        row*self.ws:(row+1)*self.ws,
+                        col*self.ws:(col+1)*self.ws
                     ]
                 ),
                 'index': (row, col)

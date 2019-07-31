@@ -197,14 +197,14 @@ class FCNwPool(nn.Module):
         return fx
 
 class InConv(nn.Module):
-    def __init__(self, in_channel):
+    def __init__(self, in_channel, out_channel):
         super(InConv, self).__init__()
         self.net = nn.Sequential(
             nn.Conv2d(in_channel, in_channel, kernel_size=(7,7), stride=(1,1), padding=(3,3), bias=False),
             nn.BatchNorm2d(in_channel),
             nn.ReLU(inplace=True),
             # nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-            nn.Conv2d(in_channel, in_channel, kernel_size=(1,1), stride=(4,4), bias=False), # downsample by 4
+            nn.Conv2d(in_channel, out_channel, kernel_size=(1,1), stride=(4,4), bias=True), # downsample by 4
         )
     def forward(self, x):
         return self.net(x)
@@ -288,7 +288,7 @@ class FCNwBottleneck(nn.Module):
         super(FCNwBottleneck, self).__init__()
         self.pix_res = pix_res
         self.downsample = nn.Sequential(
-            InConv(in_channel), # downsampled by 4
+            InConv(in_channel, in_channel), # downsampled by 4
             DSLayer(in_channel, 32, 64, 4), # downsampled by 4
             DSLayer(64, 128, 256, 2), # downsampled by 2
             DSLayer(256, 512, 1024, 2), # downsampled by 2
@@ -361,3 +361,21 @@ class FCNwBottleneck(nn.Module):
         # import ipdb; ipdb.set_trace()
         out = th.stack((res1, res2, res3, res4)).view(-1, 4, x.shape[2], x.shape[3])
         return self.last(out)
+
+class SimplerFCNwBottleneck(nn.Module):
+    def __init__(self, in_channel):
+        super(SimplerFCNwBottleneck, self).__init__()
+        self.downsample = InConv(in_channel, 16)
+        self.upsample = OutConv(16)
+    
+    def pad(self, x, xt):
+        (_, _, h, w) = x.shape
+        (_, _, ht, wt) = xt.shape
+        hdif = ht - h
+        wdif = wt - w
+        x = F.pad(x, (wdif//2, wdif-wdif//2, hdif//2, hdif-hdif//2), mode='replicate')
+        return x
+    
+    def forward(self, x):
+        out = self.upsample(self.downsample(x))
+        return self.pad(out, x)
