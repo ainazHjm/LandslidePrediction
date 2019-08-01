@@ -21,13 +21,14 @@ def validate(params, data_loader, _log, flag):
         prune = params['prune']
 
         if params['model'] == 'FCNwBottleneck':
-           trained_model = model.FCNwBottleneck(params['feature_num'], params['pix_res']).cuda()
+           trained_model = model.FCNwBottleneck(params['feature_num'], params['pix_res'])
         elif params['model'] == 'UNet':
-            trained_model = UNet(params['feature_num'], 1).cuda()
+            trained_model = UNet(params['feature_num'], 1)
         
         if th.cuda.device_count() > 1:
             trained_model = nn.DataParallel(trained_model)
         trained_model.load_state_dict(th.load(params['load_model']))
+        trained_model = trained_model.cuda()
         _log.info('[{}] model is successfully loaded.'.format(ctime()))
 
         data_iter = iter(data_loader)

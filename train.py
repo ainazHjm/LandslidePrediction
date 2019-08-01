@@ -111,10 +111,7 @@ def train(train_loader, val_loader, train_param, data_param, loc_param, _log, _r
                     )
                 )
                 loss_ = 0
-
-        if (epoch+1) % loc_param['save'] == 0:
-            th.save(train_model.state_dict(), model_dir+'model_{}.pt'.format(str(epoch+1)))
-        
+    
         del data, gt, prds, indices
         v_loss = validate(train_model, val_loader, data_param, train_param, _log)
         scheduler.step(v_loss)
@@ -127,8 +124,11 @@ def train(train_loader, val_loader, train_param, data_param, loc_param, _log, _r
             epoch+1
         )
 
+        if (epoch+1) % loc_param['save'] == 0:
+            th.save(train_model.cpu().state_dict(), model_dir+'model_{}.pt'.format(str(epoch+1)))
+    
     writer.export_scalars_to_json(model_dir+'loss.json')
-    th.save(train_model.state_dict(), model_dir+'trained_model.pt')
+    th.save(train_model.cpu().state_dict(), model_dir+'trained_model.pt')
     save_config(writer.file_writer.get_logdir()+'/config.txt', train_param, data_param)
     _log.info('[{}] model has been trained and config file has been saved.'.format(ctime()))
     
