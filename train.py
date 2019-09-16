@@ -51,13 +51,17 @@ def train(train_loader, val_loader, train_param, data_param, loc_param, _log, _r
         train_model = model.FCNwBottleneck(data_param['feature_num'], data_param['pix_res']).cuda()
     elif train_param['model'] == 'SimplerFCNwBottleneck':
         train_model = model.SimplerFCNwBottleneck(data_param['feature_num']).cuda()
+    elif train_param['model'] == 'Logistic':
+        train_model = model.Logistic(data_param['feature_num']).cuda()
+    elif train_param['model'] == 'PolyLogistic':
+        train_model = model.PolyLogistic(data_param['feature_num']).cuda()
     
-    if loc_param['load_model']:
-        train_model.load_state_dict(th.load(loc_param['load_model']).state_dict())
-    _log.info('[{}] model is initialized ...'.format(ctime()))
-
     if th.cuda.device_count() > 1:
         train_model = nn.DataParallel(train_model)
+    
+    if loc_param['load_model']:
+        train_model.load_state_dict(th.load(loc_param['load_model']))
+    _log.info('[{}] model is initialized ...'.format(ctime()))
     
     if train_param['optim'] == 'Adam':
         optimizer = to.Adam(train_model.parameters(), lr=train_param['lr'], weight_decay=train_param['decay'])
@@ -85,7 +89,7 @@ def train(train_loader, val_loader, train_param, data_param, loc_param, _log, _r
             loss = criterion(prds[indices], gt[indices])
             running_loss += loss.item()
             loss_ += loss.item()
-            
+            # import ipdb; ipdb.set_trace()
             loss.backward()
             optimizer.step()
 
@@ -111,8 +115,7 @@ def train(train_loader, val_loader, train_param, data_param, loc_param, _log, _r
                     )
                 )
                 loss_ = 0
-    
-        del data, gt, prds, indices
+        
         v_loss = validate(train_model, val_loader, data_param, train_param, _log)
         scheduler.step(v_loss)
         _log.info('[{}] validation loss at [{}/{}]: {}'.format(ctime(), epoch+1, train_param['n_epochs'], v_loss))
@@ -123,9 +126,10 @@ def train(train_loader, val_loader, train_param, data_param, loc_param, _log, _r
             {'test': v_loss, 'train': running_loss/len(train_iter)},
             epoch+1
         )
-
+        del data, gt, prds, indices
         if (epoch+1) % loc_param['save'] == 0:
             th.save(train_model.cpu().state_dict(), model_dir+'model_{}.pt'.format(str(epoch+1)))
+            train_model = train_model.cuda()
     
     writer.export_scalars_to_json(model_dir+'loss.json')
     th.save(train_model.cpu().state_dict(), model_dir+'trained_model.pt')
