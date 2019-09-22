@@ -219,7 +219,57 @@ class LandslideDataset(Dataset):
                 'index': (row, col)
             }
             return sample
-        
+
+class DistLandslideDataset(LandslideDataset):
+    def __init__(self, data_path, index_path, region, ws, pad, prune, dist_num):
+        super(DistLandslideDataset, self).__init__(data_path, index_path, region, ws, pad, prune)
+        # self.indices = np.load(index_path) # validation and train indices should be handled in the indices path
+        # self.data_path = data_path
+        # self.ws = ws
+        # self.region = region
+        # self.pad = pad
+        # self.prune = prune
+        self.dist_num = dist_num
+
+    # def __len__(self):
+    #     return self.indices.shape[0]
+    
+    def __getitem__(self, index):
+        with h5py.File(self.data_path, 'r') as f:
+            entry = self.indices[index, :]
+            row, col = int(entry[0]), int(entry[1])
+            data = f[self.region]['data/dist0'][
+                :,
+                row*self.ws+self.pad-self.prune:(row+1)*self.ws+self.pad+self.prune,
+                col*self.ws+self.pad-self.prune:(col+1)*self.ws+self.pad+self.prune
+            ]
+            for i in range(self.dist_num):
+                data = np.concatenate(
+                    (
+                        data,
+                        f[self.region]['data/dist{}'.format(str(i+1))][
+                            :,
+                            row*self.ws+self.pad-self.prune:(row+1)*self.ws+self.pad+self.prune,
+                            col*self.ws+self.pad-self.prune:(col+1)*self.ws+self.pad+self.prune
+                        ]
+                    ),
+                    axis=0
+                )
+            sample = {
+                'data': th.tensor(data),
+                'gt': th.tensor(
+                    f[self.region]['gt'][
+                        :,
+                        row*self.ws:(row+1)*self.ws,
+                        col*self.ws:(col+1)*self.ws
+                    ]
+                ),
+                'index': (row, col)
+            }
+            del data
+            return sample
+
+
 def initilize_data_oversample(args, fw):
     with h5py.File(args.data_path, 'r') as f:
         dataset = f[args.region]['train']['data']

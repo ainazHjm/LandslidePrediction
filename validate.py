@@ -4,7 +4,7 @@ import numpy as np
 import model
 from torchvision.utils import save_image
 from torch.utils.data import DataLoader
-from loader import LandslideDataset
+from loader import LandslideDataset, DistLandslideDataset
 from time import ctime
 from sacred import Experiment
 from unet import UNet
@@ -24,11 +24,17 @@ def validate(params, data_loader, _log, flag):
            trained_model = model.FCNwBottleneck(params['feature_num'], params['pix_res'])
         elif params['model'] == 'UNet':
             trained_model = UNet(params['feature_num'], 1)
+        elif params['model'] == 'SimplerFCNwBottleneck':
+            trained_model = model.SimplerFCNwBottleneck(params['feature_num'])
+        elif params['model'] == 'Logistic':
+            trained_model = model.Logistic(params['feature_num'])
+        elif params['model'] == 'PolyLogistic':
+            trained_model = model.PolyLogistic(params['feature_num'])
         
+        trained_model = trained_model.cuda()
         if th.cuda.device_count() > 1:
             trained_model = nn.DataParallel(trained_model)
         trained_model.load_state_dict(th.load(params['load_model']))
-        trained_model = trained_model.cuda()
         _log.info('[{}] model is successfully loaded.'.format(ctime()))
 
         data_iter = iter(data_loader)
@@ -58,7 +64,7 @@ def validate(params, data_loader, _log, flag):
 @ex.config
 def ex_cfg():
     params = {
-        'data_path': '/tmp/landslide_edgePaded.h5',
+        'data_path': '/tmp/Veneto_data.h5',
         'index_path': '/home/ainaz/Projects/Landslides/image_data/new_partitioning/',
         'load_model': '',
         'save_to': '',
@@ -67,37 +73,61 @@ def ex_cfg():
         'pad': 64,
         'prune': 64,
         'shape': (21005, 19500), # final shape of the image
-        'bs': 20,
-        'n_workers': 8,
-        'model': 'UNet',
+        'bs': 4,
+        'n_workers': 2,
+        'model': 'FCNwBottleneck',
         'feature_num': 94,
         'pix_res': 10,
         'write_image': True,
+        'dist_feature': False,
+        'dist_num': 3,
     }
 
 @ex.automain
 def main(params, _log):
-    vd = LandslideDataset(
-        params['data_path'],
-        params['index_path']+'{}_test_indices.npy'.format(params['region']),
-        params['region'],
-        params['ws'],
-        params['pad'],
-        params['prune']
-    )
+    if params['dist_feature']:
+        vd = DistLandslideDataset(
+            params['data_path'],
+            params['index_path']+'{}_test_indices.npy'.format(params['region']),
+            params['region'],
+            params['ws'],
+            params['pad'],
+            params['prune'],
+            params['dist_num']
+        )
+    else:
+        vd = LandslideDataset(
+            params['data_path'],
+            params['index_path']+'{}_test_indices.npy'.format(params['region']),
+            params['region'],
+            params['ws'],
+            params['pad'],
+            params['prune']
+        )
     test_loader = DataLoader(vd, batch_size=params['bs'], shuffle=False, num_workers=params['n_workers'])
     _log.info('[{}] prepared the dataset and the data loader for validation.'.format(ctime()))
     test_loss = validate(params, test_loader, _log, 'test')
     _log.info('[{}] average loss on test set is {}'.format(ctime(), str(test_loss)))
 
     if params['write_image']:
-        dataset = LandslideDataset(
-            params['data_path'],
-            params['index_path']+'{}_data_indices.npy'.format(params['region']),
-            params['region'],
-            params['ws'],
-            params['pad'],
-            params['prune']
-        )
+        if params['dist_feature']:
+            dataset = DistLandslideDataset(
+                params['data_path'],
+                params['index_path']+'{}_data_indices.npy'.format(params['region']),
+                params['region'],
+                params['ws'],
+                params['pad'],
+                params['prune'],
+                params['dist_num']
+            )
+        else:
+            dataset = LandslideDataset(
+                params['data_path'],
+                params['index_path']+'{}_data_indices.npy'.format(params['region']),
+                params['region'],
+                params['ws'],
+                params['pad'],
+                params['prune']
+            )
         data_loader = DataLoader(dataset, batch_size=params['bs'], num_workers=params['n_workers'])
         validate(params, data_loader, _log, 'data')

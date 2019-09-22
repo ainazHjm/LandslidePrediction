@@ -2,7 +2,9 @@
 import torch as th
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 import os
+import h5py
 from torch.nn import Sigmoid
 from time import ctime
 from PIL import Image
@@ -53,3 +55,15 @@ def save_config(path, train_param, data_param):
          for params in [train_param, data_param]:
             for e in params:
                 f.write('{}: {}\n'.format(e, params[e]))
+
+def plot(out_path, dset_path, colormap='Reds', region='Veneto'):
+    f = h5py.File(dset_path, 'r')
+    gt = f[region]['gt'][0,:,:]
+    gt[gt<0] = 0
+    output = np.load(out_path)
+    __norm__ = mpl.colors.Normalize(vmin=0, vmax=output.max())
+    plt.subplot(1,2,1)
+    plt.imshow(output, cmap=colormap, norm=__norm__)
+    plt.subplot(1,2,2)
+    plt.imshow(gt, cmap=colormap)
+    plt.show()

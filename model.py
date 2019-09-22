@@ -16,10 +16,10 @@ class PolyLogistic(nn.Module):
         self.net = nn.Sequential(
             nn.Conv2d(in_channel, 32, kernel_size=(1,1), stride=(1,1)),
             # nn.Conv2d(in_channel, 64, kernel_size=(7,7), stride=(1,1), padding=(3,3)),
-            nn.BatchNorm2d(32),
+            # nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.Conv2d(32, 4, kernel_size=(1,1), stride=(1,1)),
-            nn.BatchNorm2d(4),
+            # nn.BatchNorm2d(4),
             nn.ReLU(),
             nn.Conv2d(4, 1, kernel_size=(1,1), stride=(1,1)),
         )

@@ -1,5 +1,5 @@
 from train import train
-from loader import LandslideDataset, SampledPixDataset, LargeSample
+from loader import LandslideDataset, DistLandslideDataset
 from torch.utils.data import DataLoader
 # from dimension_reduction import reduce_dim
 from time import ctime
@@ -11,11 +11,11 @@ ex = Experiment('CNNPatch')
 @ex.config
 def ex_cfg():
     train_param = {
-        'optim': 'SGD',
+        'optim': 'Adam',
         'lr': 0.0001,
         'n_epochs': 100,
         'bs': 4,
-        'decay': 1e-5,
+        'decay': 1e-3,
         'patience': 2,
         'pos_weight': 1,
         'model': 'UNet'
@@ -31,7 +31,9 @@ def ex_cfg():
         'pad': 64,
         'feature_num': 94,
         'oversample': False,
-        'prune': 64
+        'prune': 64,
+        'dist_num': 3, #corresponding to 30,100,300
+        'dist_feature': False
     }
     loc_param = {
         'load_model': '',
@@ -72,17 +74,31 @@ def grid_search(loader, train_param, data_param, loc_param, _log, _run):
 @ex.automain
 def main(train_param, data_param, loc_param, _log, _run):
     data = []
-    for flag in ['train', 'validation']:
-        data.append(
-            LandslideDataset(
-                loc_param['data_path'],
-                loc_param['index_path']+'{}_{}_indices.npy'.format(data_param['region'], flag),
-                data_param['region'],
-                data_param['ws'],
-                data_param['pad'],
-                data_param['prune']
+    if data_param['dist_feature']:
+        for flag in ['train', 'validation']:
+            data.append(
+                DistLandslideDataset(
+                    loc_param['data_path'],
+                    loc_param['index_path']+'{}_{}_indices.npy'.format(data_param['region'], flag),
+                    data_param['region'],
+                    data_param['ws'],
+                    data_param['pad'],
+                    data_param['prune'],
+                    data_param['dist_num']
+                )
             )
-        )
+    else:    
+        for flag in ['train', 'validation']:
+            data.append(
+                LandslideDataset(
+                    loc_param['data_path'],
+                    loc_param['index_path']+'{}_{}_indices.npy'.format(data_param['region'], flag),
+                    data_param['region'],
+                    data_param['ws'],
+                    data_param['pad'],
+                    data_param['prune']
+                )
+            )
     loader = [DataLoader(d, batch_size=train_param['bs'], shuffle=True, num_workers=data_param['n_workers']) for d in data]
     # if data_param['grid_search']:
     #     lr, optim = grid_search(loader, train_param, data_param, loc_param)
