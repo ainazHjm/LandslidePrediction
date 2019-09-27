@@ -56,14 +56,22 @@ def save_config(path, train_param, data_param):
             for e in params:
                 f.write('{}: {}\n'.format(e, params[e]))
 
-def plot(out_path, dset_path, colormap='Reds', region='Veneto'):
+def plot(out_path, dset_path, colormap='coolwarm', region='Veneto'):
+    # two other colormaps: bwr, seismic
+    
+    # bottom = mpl.cm.get_cmap('Oranges_r', 128)
+    # top = mpl.cm.get_cmap('Blues', 128)
+    # newcolors = np.vstack((top(np.linspace(0, 0.1, 128)), bottom(np.linspace(1.0, 1, 128))))
+    # newcmp = mpl.colors.ListedColormap(newcolors, name='OrangeBlue')
+
     f = h5py.File(dset_path, 'r')
     gt = f[region]['gt'][0,:,:]
     gt[gt<0] = 0
     output = np.load(out_path)
-    __norm__ = mpl.colors.Normalize(vmin=0, vmax=output.max())
+    # __norm__ = mpl.colors.Normalize(vmin=0, vmax=output.max())
+    __norm__ = mpl.colors.LogNorm(vmin=0.001, vmax=1)
     plt.subplot(1,2,1)
     plt.imshow(output, cmap=colormap, norm=__norm__)
     plt.subplot(1,2,2)
-    plt.imshow(gt, cmap=colormap)
+    plt.imshow(gt, cmap='Reds')
     plt.show()
