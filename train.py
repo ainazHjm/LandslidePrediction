@@ -71,6 +71,13 @@ def train(train_loader, val_loader, train_param, data_param, loc_param, _log, _r
     scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=train_param['patience'], verbose=True, factor=0.5)
     criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([train_param['pos_weight']]).cuda())
 
+    # valatZero = validate(train_model, val_loader, data_param, train_param, _log)
+    # _log.info('[{}] validation loss before training: {}'.format(ctime(), valatZero))
+    # _run.log_scalar('training.val_loss', valatZero, 0)
+    # trainatZero = validate(train_model, train_loader, data_param, train_param, _log)
+    # _log.info('[{}] train loss before training: {}'.format(ctime(), trainatZero))
+    # _run.log_scalar('training.loss_epoch', trainatZero, 0)
+    
     loss_ = 0
     prune = data_param['prune']
     for epoch in range(train_param['n_epochs']):
