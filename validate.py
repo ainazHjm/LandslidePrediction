@@ -88,7 +88,7 @@ def main(params, _log):
     if params['dist_feature']:
         vd = DistLandslideDataset(
             params['data_path'],
-            params['index_path']+'{}_test_indices.npy'.format(params['region']),
+            np.load(params['index_path']+'{}_test_indices.npy'.format(params['region'])),
             params['region'],
             params['ws'],
             params['pad'],
@@ -98,7 +98,7 @@ def main(params, _log):
     else:
         vd = LandslideDataset(
             params['data_path'],
-            params['index_path']+'{}_test_indices.npy'.format(params['region']),
+            np.load(params['index_path']+'{}_test_indices.npy'.format(params['region'])),
             params['region'],
             params['ws'],
             params['pad'],
@@ -113,7 +113,7 @@ def main(params, _log):
         if params['dist_feature']:
             dataset = DistLandslideDataset(
                 params['data_path'],
-                params['index_path']+'{}_data_indices.npy'.format(params['region']),
+                np.load(params['index_path']+'{}_data_indices.npy'.format(params['region'])),
                 params['region'],
                 params['ws'],
                 params['pad'],
@@ -123,7 +123,7 @@ def main(params, _log):
         else:
             dataset = LandslideDataset(
                 params['data_path'],
-                params['index_path']+'{}_data_indices.npy'.format(params['region']),
+                np.load(params['index_path']+'{}_data_indices.npy'.format(params['region'])),
                 params['region'],
                 params['ws'],
                 params['pad'],

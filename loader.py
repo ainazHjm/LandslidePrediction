@@ -185,9 +185,9 @@ class LandslideDataset(Dataset):
     When testing, we don't need to have stride smaller than ws.
     Also, we don't need to oversample.
     '''
-    def __init__(self, data_path, index_path, region, ws, pad, prune):
+    def __init__(self, data_path, indices, region, ws, pad, prune):
         super(LandslideDataset, self).__init__()
-        self.indices = np.load(index_path) # validation and train indices should be handled in the indices path
+        self.indices = indices # validation and train indices should be handled in the indices path
         self.data_path = data_path
         self.ws = ws
         self.region = region
@@ -221,19 +221,10 @@ class LandslideDataset(Dataset):
             return sample
 
 class DistLandslideDataset(LandslideDataset):
-    def __init__(self, data_path, index_path, region, ws, pad, prune, dist_num):
-        super(DistLandslideDataset, self).__init__(data_path, index_path, region, ws, pad, prune)
-        # self.indices = np.load(index_path) # validation and train indices should be handled in the indices path
-        # self.data_path = data_path
-        # self.ws = ws
-        # self.region = region
-        # self.pad = pad
-        # self.prune = prune
+    def __init__(self, data_path, indices, region, ws, pad, prune, dist_num):
+        super(DistLandslideDataset, self).__init__(data_path, indices, region, ws, pad, prune)
         self.dist_num = dist_num
 
-    # def __len__(self):
-    #     return self.indices.shape[0]
-    
     def __getitem__(self, index):
         with h5py.File(self.data_path, 'r') as f:
             entry = self.indices[index, :]
