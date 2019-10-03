@@ -7,9 +7,6 @@ from sacred import Experiment
 
 ex = Experiment('Cross_Validation')
 
-# @ex.config
-# def ex_cfg():
-
 train_param = {
     'optim': 'Adam',
     'lr': 0.0001,
@@ -20,7 +17,10 @@ train_param = {
     'pos_weight': 1,
     'model': 'Logistic'
 }
-data_param = {
+
+@ex.config
+def ex_cfg():
+    data_param = {
     'cross_validate': True,
     'n_workers': 2,
     'region': 'Veneto',
@@ -32,13 +32,13 @@ data_param = {
     'prune': 64,
     'dist_num': 3, #corresponding to 30,100,300
     'dist_feature': False
-}
-loc_param = {
-    'load_model': '',
-    'data_path': '/tmp/Veneto_data.h5',
-    'index_path': '/home/ainaz/Projects/Landslides/image_data/new_partitioning/',
-    'save': 20
-}
+    }
+    loc_param = {
+        'load_model': '',
+        'data_path': '/tmp/Veneto_data.h5',
+        'index_path': '/home/ainaz/Projects/Landslides/image_data/new_partitioning/',
+        'save': 20
+    }
 
 def plot_grid(x, y):
     import matplotlib.pyplot as plt
@@ -97,7 +97,7 @@ def helper(train_param, data_param, loc_param, _log, _run):
     return k_fold_loss/5        
 
 @ex.automain
-def cross_validate(_log, _run):
+def cross_validate(data_param, loc_param, _log, _run):
     best_lr, best_optim = -1, 'Adam'
     min_error = 1e5
     for optim in ['Adam', 'SGD']:
