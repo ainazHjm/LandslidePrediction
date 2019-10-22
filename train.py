@@ -37,8 +37,8 @@ def validate(model, val_loader, data_param, train_param, _log):
         return running_loss/len(val_iter)
 
 def train(train_loader, val_loader, train_param, data_param, loc_param, _log, _run):
-    # writer = SummaryWriter()
-    # model_dir, _ = create_dir(writer.file_writer.get_logdir())
+    writer = SummaryWriter()
+    model_dir, _ = create_dir(writer.file_writer.get_logdir())
     sig = nn.Sigmoid()
 
     if train_param['model'] == "FCN":
@@ -71,12 +71,12 @@ def train(train_loader, val_loader, train_param, data_param, loc_param, _log, _r
     scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=train_param['patience'], verbose=True, factor=0.5)
     criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([train_param['pos_weight']]).cuda())
 
-    # valatZero = validate(train_model, val_loader, data_param, train_param, _log)
-    # _log.info('[{}] validation loss before training: {}'.format(ctime(), valatZero))
-    # _run.log_scalar('training.val_loss', valatZero, 0)
-    # trainatZero = validate(train_model, train_loader, data_param, train_param, _log)
-    # _log.info('[{}] train loss before training: {}'.format(ctime(), trainatZero))
-    # _run.log_scalar('training.loss_epoch', trainatZero, 0)
+    valatZero = validate(train_model, val_loader, data_param, train_param, _log)
+    _log.info('[{}] validation loss before training: {}'.format(ctime(), valatZero))
+    _run.log_scalar('training.val_loss', valatZero, 0)
+    trainatZero = validate(train_model, train_loader, data_param, train_param, _log)
+    _log.info('[{}] train loss before training: {}'.format(ctime(), trainatZero))
+    _run.log_scalar('training.loss_epoch', trainatZero, 0)
     
     loss_ = 0
     prune = data_param['prune']
@@ -103,15 +103,15 @@ def train(train_loader, val_loader, train_param, data_param, loc_param, _log, _r
             _run.log_scalar("training.max_prob", th.max(sig(prds)).item(), epoch*len(train_iter)+iter_+1)
             _run.log_scalar("training.min_prob", th.min(sig(prds)).item(), epoch*len(train_iter)+iter_+1)
 
-            # writer.add_scalar("loss/train_iter", loss.item(), epoch*len(train_iter)+iter_+1)
-            # writer.add_scalars(
-            #     "probRange",
-            #     {'min': th.min(sig(prds)), 'max': th.max(sig(prds))},
-            #     epoch*len(train_iter)+iter_+1
-            # )
+            writer.add_scalar("loss/train_iter", loss.item(), epoch*len(train_iter)+iter_+1)
+            writer.add_scalars(
+                "probRange",
+                {'min': th.min(sig(prds)), 'max': th.max(sig(prds))},
+                epoch*len(train_iter)+iter_+1
+            )
             if (epoch*len(train_iter)+iter_+1) % 20 == 0:
                 _run.log_scalar("training.loss_20", loss_/20, epoch*len(train_iter)+iter_+1)
-                # writer.add_scalar("loss/train_20", loss_/20, epoch*len(train_iter)+iter_+1)
+                writer.add_scalar("loss/train_20", loss_/20, epoch*len(train_iter)+iter_+1)
                 _log.info(
                     '[{}] loss at [{}/{}]: {}'.format(
                         ctime(),
@@ -127,19 +127,19 @@ def train(train_loader, val_loader, train_param, data_param, loc_param, _log, _r
         _log.info('[{}] validation loss at [{}/{}]: {}'.format(ctime(), epoch+1, train_param['n_epochs'], v_loss))
         _run.log_scalar('training.val_loss', v_loss, epoch+1)
         _run.log_scalar('training.loss_epoch', running_loss/len(train_iter), epoch+1)
-        # writer.add_scalars(
-        #     "loss/grouped",
-        #     {'test': v_loss, 'train': running_loss/len(train_iter)},
-        #     epoch+1
-        # )
+        writer.add_scalars(
+            "loss/grouped",
+            {'test': v_loss, 'train': running_loss/len(train_iter)},
+            epoch+1
+        )
         del data, gt, prds, indices
         if (epoch+1) % loc_param['save'] == 0:
             th.save(train_model.cpu().state_dict(), model_dir+'model_{}.pt'.format(str(epoch+1)))
             train_model = train_model.cuda()
     
-    # writer.export_scalars_to_json(model_dir+'loss.json')
-    # th.save(train_model.cpu().state_dict(), model_dir+'trained_model.pt')
-    # save_config(writer.file_writer.get_logdir()+'/config.txt', train_param, data_param)
+    writer.export_scalars_to_json(model_dir+'loss.json')
+    th.save(train_model.cpu().state_dict(), model_dir+'trained_model.pt')
+    save_config(writer.file_writer.get_logdir()+'/config.txt', train_param, data_param)
     _log.info('[{}] model has been trained and config file has been saved.'.format(ctime()))
     
     return v_loss

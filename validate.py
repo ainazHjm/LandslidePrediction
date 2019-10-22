@@ -85,29 +85,39 @@ def ex_cfg():
 
 @ex.automain
 def main(params, _log):
-    if params['dist_feature']:
-        vd = DistLandslideDataset(
-            params['data_path'],
-            np.load(params['index_path']+'{}_test_indices.npy'.format(params['region'])),
-            params['region'],
-            params['ws'],
-            params['pad'],
-            params['prune'],
-            params['dist_num']
-        )
-    else:
-        vd = LandslideDataset(
-            params['data_path'],
-            np.load(params['index_path']+'{}_test_indices.npy'.format(params['region'])),
-            params['region'],
-            params['ws'],
-            params['pad'],
-            params['prune']
-        )
-    test_loader = DataLoader(vd, batch_size=params['bs'], shuffle=False, num_workers=params['n_workers'])
-    _log.info('[{}] prepared the dataset and the data loader for validation.'.format(ctime()))
+    data = []
+    for flag in ['test', 'train']:
+        if params['dist_feature']:
+            data.append(
+                DistLandslideDataset(
+                    params['data_path'],
+                    np.load(params['index_path']+'{}_{}_indices.npy'.format(params['region'], flag)),
+                    params['region'],
+                    params['ws'],
+                    params['pad'],
+                    params['prune'],
+                    params['dist_num']
+                )
+            )
+        else:
+            data.append(
+                LandslideDataset(
+                    params['data_path'],
+                    np.load(params['index_path']+'{}_{}_indices.npy'.format(params['region'], flag)),
+                    params['region'],
+                    params['ws'],
+                    params['pad'],
+                    params['prune']
+                )
+            )
+    test_loader = DataLoader(data[0], batch_size=params['bs'], shuffle=False, num_workers=params['n_workers'])
+    _log.info('[{}] prepared the dataset and the data loader for test.'.format(ctime()))
     test_loss = validate(params, test_loader, _log, 'test')
-    _log.info('[{}] average loss on test set is {}'.format(ctime(), str(test_loss)))
+    _log.info('[{}] average loss on test set is {}'.format(ctime(), test_loss))
+    train_loader = DataLoader(data[1], batch_size=params['bs'], shuffle=False, num_workers=params['n_workers'])
+    _log.info('[{}] prepared the dataset and the data loader for train.'.format(ctime()))
+    train_loss = validate(params, train_loader, _log, 'train')
+    _log.info('[{}] average loss on train set is {}'.format(ctime(), train_loss))
 
     if params['write_image']:
         if params['dist_feature']:
