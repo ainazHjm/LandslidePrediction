@@ -64,18 +64,20 @@ def plot(out_path, dset_path, colormap='coolwarm', region='Veneto'):
     # newcolors = np.vstack((top(np.linspace(0, 0.1, 128)), bottom(np.linspace(1.0, 1, 128))))
     # newcmp = mpl.colors.ListedColormap(newcolors, name='OrangeBlue')
     f = h5py.File(dset_path, 'r')
-    gt = f[region]['gt'][0,:,:]
+    gt = f[region]['gt'][0,5000:7500,11500:14000]
     gt[gt<0] = 0
-    output = np.load(out_path)
+    output = np.load(out_path)[5000:7500, 11500:14000]
     # __norm__ = mpl.colors.Normalize(vmin=0, vmax=output.max())
     __norm__ = mpl.colors.LogNorm(vmin=0.001, vmax=1)
     # plt.subplot(1,2,1)
     plt.imshow(output, cmap=colormap, norm=__norm__)
     # plt.subplot(1,2,2)
     # plt.imshow(gt, cmap='Reds')
+    plt.colorbar()
     # plt.show()
     save_to = '/'.join(out_path.split('/')[:-1])
     name = out_path.split('/')[-3]
+    # name = 'gt'
     plt.savefig(save_to+'/'+name+'.png', bbox_inches='tight')
-    plt.savefig(save_to+'/'+name+'.eps', bbox_inches='tight')
-    plt.show()
+    # plt.savefig(save_to+'/'+name+'.eps', bbox_inches='tight')
+    # plt.show()

@@ -9,12 +9,12 @@ from time import ctime
 
 ex = Experiment('ROC Curve')
 colors = {
-    'SACNN': 'tab:blue',
+    'LACNN': 'tab:blue',
     'CNN': 'tab:orange',
     'NN': 'tab:green',
     'LLR': 'tab:red',
-    'SANN': 'tab:purple',
-    'SALLR': 'tab:cyan'
+    'LANN': 'tab:purple',
+    'Naive': 'tab:cyan'
 }
 
 @ex.config
