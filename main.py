@@ -1,62 +1,85 @@
-# pylint: disable=E0611
-from data import process, normalize
-from train import train, cross_validate
-import argparse
-import torch as th
 import numpy as np
-from utils.args import str2bool
-from utils.plot import save_results
+from train import train
+from loader import LandslideDataset, DistLandslideDataset
+from torch.utils.data import DataLoader
+# from dimension_reduction import reduce_dim
+from time import ctime
+from sacred import Experiment
+# from sacred.observers import MongoObserver
 
-def get_args():
-    parser = argparse.ArgumentParser(description="Training a CNN-Classifier for landslide prediction")
-    parser.add_argument("--cross_validation", type=str2bool, default=False)
-    parser.add_argument("--model", type=str, default="FCN")
-    parser.add_argument("--debug", type=str2bool, default=False)
-    parser.add_argument("--lr", type=float, default=0.001)
-    parser.add_argument("--n_epochs", type=int, default=5)
-    parser.add_argument("--batch_size", type=int, default=5)
-    parser.add_argument("--decay", type=float, default=1e-5)
-    parser.add_argument("--load_model_path", type=str, default='')
-    parser.add_argument("--validate", type=str2bool, default=False)
-    return parser.parse_args()
+ex = Experiment('CNNPatch')
 
-def concat_data(val_idx, val_data, train_data=th.load("../image_data/data/Veneto/train_data.pt")):
-    s = train_data.shape[2]//4
-    # data = th.zeros(train_data.shape[0], train_data.shape[1], train_data.shape[2]+val_data.shape[2])
-    # data[]
-    d = th.cat(
-            (
-                th.cat(
-                    (train_data[:, :, 0:val_idx*s], val_data),
-                    dim=2
-                ),
-                train_data[:, :, val_idx*s:]
-            ),
-            dim=2
-        )
-    return d
+@ex.config
+def ex_cfg():
+    train_param = {
+        'optim': 'Adam',
+        'lr': 0.0001,
+        'n_epochs': 100,
+        'bs': 4,
+        'decay': 1e-3,
+        'patience': 2,
+        'pos_weight': 1,
+        'model': 'UNet'
+    }
+    data_param = {
+        'n_workers': 4,
+        'region': 'Veneto',
+        'pix_res': 10,
+        'stride': 500,
+        'ws': 500,
+        'pad': 64,
+        'feature_num': 94,
+        'oversample': False,
+        'prune': 64,
+        'dist_num': 3, #corresponding to 30,100,300
+        'dist_feature': False
+    }
+    loc_param = {
+        'load_model': '',
+        'data_path': '/tmp/Veneto_data.h5',
+        'index_path': '/home/ainaz/Projects/Landslides/image_data/new_partitioning/',
+        'save': 20
+    }
 
-def main():
-    args = get_args()
-    if args.cross_validation:
-        data = process()
-        train_data, val_data, val_idx = cross_validate(args, data)
-    else:
-        # the data that is loaded is standardized with mean 0 and std 1
-        val_data = th.load("../image_data/data/Veneto/val_data.pt")
-        val_idx = np.load("../image_data/data/Veneto/val_idx.npy")
-    
-    if args.validate:
-        print("loading a trained model...")
-        model = th.load(args.load_model_path)
-        save_results(model, val_data)
-        print("validating on the whole dataset ...")
-        data = concat_data(val_idx, val_data)
-        save_results(model, data)
-        print("model is validated and the results are saved.")
-    else:
-        print("starting to train ...")
-        train(args, val_data)
+# def plot_grid(x, y):
+#     import matplotlib.pyplot as plt
+#     fig = plt.figure()
+#     fig.add_subplot(1,1,1)
+#     plt.scatter(x, y['Adam'], c='b')
+#     plt.scatter(x, y['SGD'], c='r')
+#     plt.show()
 
-if __name__ == "__main__":
-    main()
+@ex.automain
+def main(train_param, data_param, loc_param, _log, _run):
+    data = []
+    if data_param['dist_feature']:
+        for flag in ['train', 'validation']:
+            data.append(
+                DistLandslideDataset(
+                    loc_param['data_path'],
+                    np.load(loc_param['index_path']+'{}_{}_indices.npy'.format(data_param['region'], flag)),
+                    data_param['region'],
+                    data_param['ws'],
+                    data_param['pad'],
+                    data_param['prune'],
+                    data_param['dist_num']
+                )
+            )
+    else:    
+        for flag in ['train', 'validation']:
+            data.append(
+                LandslideDataset(
+                    loc_param['data_path'],
+                    np.load(loc_param['index_path']+'{}_{}_indices.npy'.format(data_param['region'], flag)),
+                    data_param['region'],
+                    data_param['ws'],
+                    data_param['pad'],
+                    data_param['prune']
+                )
+            )
+    loader = [DataLoader(d, batch_size=train_param['bs'], shuffle=True, num_workers=data_param['n_workers']) for d in data]
+
+    _log.info('[{}]: created train and validation datasets.'.format(ctime()))
+    _log.info('[{}]: starting to train ...'.format(ctime()))
+    train(loader[0], loader[1], train_param, data_param, loc_param, _log, _run)
+    _log.info('[{}]: training is finished!'.format(ctime()))

@@ -1,114 +1,145 @@
 import model
-import numpy as np
 import torch as th
 import torch.optim as to
 import torch.nn as nn
+import os
 from time import ctime
 from tensorboardX import SummaryWriter
-from torchvision.utils import save_image
 from torch.optim.lr_scheduler import ReduceLROnPlateau
+from utils.plot import save_config
+from unet import UNet
 # pylint: disable=E1101,E0401,E1123
 
-writer = SummaryWriter()
+def create_dir(dir_name):
+    model_dir = dir_name+'/model/'
+    res_dir = dir_name+'/result/'
+    if not os.path.exists(model_dir):
+        os.mkdir(model_dir)
+    if not os.path.exists(res_dir):
+        os.mkdir(res_dir)
+    return model_dir, res_dir
 
-def make_patches(train_data_path, window=999):
-    train_data = th.load(train_data_path)
-    (c, h, w) = train_data.shape
-    hnum = h//window
-    wnum = w//window
-    input_data = th.zeros(hnum*wnum, c-1, window, window)
-    label = th.zeros(hnum*wnum, 1, window, window)
-    for i in range(hnum):
-        for j in range(wnum):
-            input_data[i*wnum+j, :, :, :] = train_data[:-1, i*window:(i+1)*window, j*window:(j+1)*window]
-            label[i*wnum+j, :, :, :] = train_data[-1, i*window:(i+1)*window, j*window:(j+1)*window]
-    return input_data, label
-
-
-def validate(model, valset):
-    (hs, ws) = (999, 999)
-    (_, h, w) = valset.shape
-    criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([500]).cuda())
-    running_loss = 0
-    for i in range(h//hs):
-        for j in range(w//ws):
-            label = valset[-1, i*hs:(i+1)*hs, j*ws:(j+1)*ws].cuda()
-            input_data = valset[:-1, i*hs:(i+1)*hs, j*ws:(j+1)*ws].unsqueeze(0).cuda()
-            predictions = model.forward(input_data).squeeze(0).squeeze(0)
-            indices = input_data[0, 0, :, :] != -100
-            if len(predictions[indices]) == 0:
-                continue
-            loss = criterion(
-                predictions[indices],
-                label[indices]
-            )
-            running_loss += loss.item()
-    return running_loss/((h//hs) * (w//ws))
-
-def train(args, val_data, train_data_path="../image_data/data/Veneto/train_data.pt"):
-    '''
-    Trains on a batch of patches of size (4, 999, 999).
-    '''
-    th.cuda.empty_cache()
-    train_data, train_label = make_patches(train_data_path)
-
-    train_model = model.FCN().cuda() if args.model == "FCN" else model.FCNwPool((4, 999, 999)).cuda()
-    if args.load_model_path:
-        train_model.load_state_dict(th.load(args.load_model_path).state_dict())
-    print("model is initialized ...")
-
-    optimizer = to.Adam(train_model.parameters(), lr = args.lr, weight_decay = args.decay)
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=5)
-    criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([500]).cuda())
-
-    bs = args.batch_size
-    num_iters = train_data.shape[0]//bs
-    for i in range(args.n_epochs):
+def validate(model, val_loader, data_param, train_param, _log):
+    with th.no_grad():
+        criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([train_param['pos_weight']]).cuda())
+        val_iter = iter(val_loader)
         running_loss = 0
-
-        for j in range(num_iters):
-            optimizer.zero_grad()
-            input_data = train_data[j*bs:(j+1)*bs, :, :, :].cuda()
-            label = train_label[j*bs:(j+1)*bs, :, :, :].cuda().squeeze(1)
-            predictions = train_model.forward(input_data).squeeze(1)
-            indices = input_data[:, 0, :, :] != -100
-
-            if len(predictions[indices]) == 0:
-                continue
-            
-            loss = criterion(
-                predictions[indices],
-                label[indices]
-                )
-            print(">> loss: %f" % loss.item())
+        prune = data_param['prune']
+        for _ in range(len(val_iter)):
+            batch_sample = val_iter.next()
+            data = batch_sample['data'].cuda()
+            gt = batch_sample['gt'].cuda()
+            prds = model.forward(data)[:, :, prune:-prune, prune:-prune]
+            indices = gt>=0
+            loss = criterion(prds[indices], gt[indices])
             running_loss += loss.item()
+        del data, gt, prds, indices
+        return running_loss/len(val_iter)
 
+def train(train_loader, val_loader, train_param, data_param, loc_param, _log, _run):
+    writer = SummaryWriter()
+    model_dir, _ = create_dir(writer.file_writer.get_logdir())
+    sig = nn.Sigmoid()
+
+    if train_param['model'] == "FCN":
+        train_model = model.FCN(data_param['feature_num']).cuda()
+    elif train_param['model'] == 'FCNwPool':
+        train_model = model.FCNwPool(data_param['feature_num'], data_param['pix_res']).cuda()
+    elif train_param['model'] == 'UNet':
+        train_model = UNet(data_param['feature_num'], 1).cuda()
+    elif train_param['model'] == 'FCNwBottleneck':
+        train_model = model.FCNwBottleneck(data_param['feature_num'], data_param['pix_res']).cuda()
+    elif train_param['model'] == 'SimplerFCNwBottleneck':
+        train_model = model.SimplerFCNwBottleneck(data_param['feature_num']).cuda()
+    elif train_param['model'] == 'Logistic':
+        train_model = model.Logistic(data_param['feature_num']).cuda()
+    elif train_param['model'] == 'PolyLogistic':
+        train_model = model.PolyLogistic(data_param['feature_num']).cuda()
+    
+    if th.cuda.device_count() > 1:
+        train_model = nn.DataParallel(train_model)
+    
+    if loc_param['load_model']:
+        train_model.load_state_dict(th.load(loc_param['load_model']))
+    _log.info('[{}] model is initialized ...'.format(ctime()))
+    
+    if train_param['optim'] == 'Adam':
+        optimizer = to.Adam(train_model.parameters(), lr=train_param['lr'], weight_decay=train_param['decay'])
+    else:
+        optimizer = to.SGD(train_model.parameters(), lr=train_param['lr'], weight_decay=train_param['decay'])
+    
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=train_param['patience'], verbose=True, factor=0.5)
+    criterion = nn.BCEWithLogitsLoss(pos_weight=th.Tensor([train_param['pos_weight']]).cuda())
+
+    valatZero = validate(train_model, val_loader, data_param, train_param, _log)
+    _log.info('[{}] validation loss before training: {}'.format(ctime(), valatZero))
+    _run.log_scalar('training.val_loss', valatZero, 0)
+    trainatZero = validate(train_model, train_loader, data_param, train_param, _log)
+    _log.info('[{}] train loss before training: {}'.format(ctime(), trainatZero))
+    _run.log_scalar('training.loss_epoch', trainatZero, 0)
+    
+    loss_ = 0
+    prune = data_param['prune']
+    for epoch in range(train_param['n_epochs']):
+        running_loss = 0
+        train_iter = iter(train_loader)
+        for iter_ in range(len(train_iter)):
+            optimizer.zero_grad()
+
+            batch_sample = train_iter.next()
+            data, gt = batch_sample['data'].cuda(), batch_sample['gt'].cuda()
+            if train_param['model'] == 'UNET':
+                prds = train_model(data)[:, :, prune:-prune, prune:-prune]
+            else:
+                prds = train_model.forward(data)[:, :, prune:-prune, prune:-prune]
+            indices = gt>=0
+            loss = criterion(prds[indices], gt[indices])
+            running_loss += loss.item()
+            loss_ += loss.item()
             loss.backward()
             optimizer.step()
-        
-        v_loss = validate(train_model, val_data)
-        scheduler.step(v_loss)
-        print("--- validation loss: %f" % v_loss)
-        writer.add_scalar("train loss", running_loss/(num_iters*bs), i)
-        writer.add_scalar("validation loss", v_loss, i)
-        
-    th.save(train_model, "../models/CNN/"+ctime().replace("  "," ").replace(" ", "_").replace(":","_")+".pt")
-    print("model has been trained and saved.")
-    return running_loss/(num_iters*bs)
 
-def cross_validate(args, data):
-    '''
-    TODO: complete this function
-    '''
-    (_, _, w) = data.shape
-    div = w//5
-    min_loss = th.inf
-    idx = -1
-    for val_idx in range(0, 5):
-        val_data = data[:, :, val_idx*div:(val_idx+1)*div]
-        train_data = th.cat((data[:, :, 0:val_idx*div], data[:, :, (val_idx+1)*div:]), 2)
-        loss = train(args, val_data).item() 
-        if loss[-1] < min_loss:
-            min_loss = loss[-1]
-            idx = val_idx
-    return th.cat((data[:, :, 0:idx*div], data[:, :, (idx+1)*div:]), 2), data[:, :, idx*div:(idx+1)*div], idx
+            _run.log_scalar("training.loss_iter", loss.item(), epoch*len(train_iter)+iter_+1)
+            _run.log_scalar("training.max_prob", th.max(sig(prds)).item(), epoch*len(train_iter)+iter_+1)
+            _run.log_scalar("training.min_prob", th.min(sig(prds)).item(), epoch*len(train_iter)+iter_+1)
+
+            writer.add_scalar("loss/train_iter", loss.item(), epoch*len(train_iter)+iter_+1)
+            writer.add_scalars(
+                "probRange",
+                {'min': th.min(sig(prds)), 'max': th.max(sig(prds))},
+                epoch*len(train_iter)+iter_+1
+            )
+            if (epoch*len(train_iter)+iter_+1) % 20 == 0:
+                _run.log_scalar("training.loss_20", loss_/20, epoch*len(train_iter)+iter_+1)
+                writer.add_scalar("loss/train_20", loss_/20, epoch*len(train_iter)+iter_+1)
+                _log.info(
+                    '[{}] loss at [{}/{}]: {}'.format(
+                        ctime(),
+                        epoch*len(train_iter)+iter_+1,
+                        train_param['n_epochs']*len(train_iter),
+                        loss_/20
+                    )
+                )
+                loss_ = 0
+        
+        v_loss = validate(train_model, val_loader, data_param, train_param, _log)
+        scheduler.step(v_loss)
+        _log.info('[{}] validation loss at [{}/{}]: {}'.format(ctime(), epoch+1, train_param['n_epochs'], v_loss))
+        _run.log_scalar('training.val_loss', v_loss, epoch+1)
+        _run.log_scalar('training.loss_epoch', running_loss/len(train_iter), epoch+1)
+        writer.add_scalars(
+            "loss/grouped",
+            {'test': v_loss, 'train': running_loss/len(train_iter)},
+            epoch+1
+        )
+        del data, gt, prds, indices
+        if (epoch+1) % loc_param['save'] == 0:
+            th.save(train_model.cpu().state_dict(), model_dir+'model_{}.pt'.format(str(epoch+1)))
+            train_model = train_model.cuda()
+    
+    writer.export_scalars_to_json(model_dir+'loss.json')
+    th.save(train_model.cpu().state_dict(), model_dir+'trained_model.pt')
+    save_config(writer.file_writer.get_logdir()+'/config.txt', train_param, data_param)
+    _log.info('[{}] model has been trained and config file has been saved.'.format(ctime()))
+    
+    return v_loss

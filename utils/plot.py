@@ -1,33 +1,32 @@
 # pylint: disable=E1101
 import torch as th
 import numpy as np
-from matplotlib import pyplot
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+import os
+import h5py
 from torch.nn import Sigmoid
-from torch import save
 from time import ctime
 from PIL import Image
 from torchvision.utils import save_image
 
-def save_results(model, val_data):
-    th.cuda.empty_cache()
-    sig = Sigmoid()
-    (_, h, w) = val_data.shape
-    print(h, w)
-    (hs, ws) = (999, 999)
-    predictions = th.zeros(hs*(h//hs), ws*(w//ws))
-    for i in range(h//hs):
-        for j in range(w//ws):
-            input_data = val_data[:-1, i*hs:(i+1)*hs, j*ws:(j+1)*ws].unsqueeze(0).cuda()
-            indices = input_data[0, 0, :, :] == -100
-            predictions[i*hs:(i+1)*hs, j*ws:(j+1)*ws] = sig(model.forward(input_data).squeeze(0).squeeze(0)).detach()
-            predictions[i*hs:(i+1)*hs, j*ws:(j+1)*ws][indices] = 0
-    # input_data = val_data[:-1, (h//hs)*hs:, (w//ws)*ws:].unsqueeze(0).cuda()
-    # predictions[hs*(h//hs):, ws*(w//ws):] = sig(model.forward(input_data).squeeze(0).squeeze(0)).detach()
-    name = ctime()
-    save(predictions, "../output/CNN/"+name.replace("  "," ").replace(" ", "_").replace(":","_")+".pt")
-    save_image(predictions, "../output/CNN/"+name.replace("  "," ").replace(" ", "_").replace(":","_")+".jpg")
+def unite_imgs(data_path, orig_shape, ws):
+    (h, w) = orig_shape
+    img_names = os.listdir(data_path)
+    names = [e for e in img_names if '.npy' in e]
+    big_img = np.zeros((h, w))
 
-def magnify(img_path = "/home/ainaz/Projects/Landslides/image_data/Veneto/veneto_label.tif"):
+    for name in names:
+        r, c = name.split('.')[0].split('_')
+        r, c = int(r), int(c)
+        big_img[r*ws:(r+1)*ws, c*ws:(c+1)*ws] = np.load(data_path+name)
+    
+    dir_name = data_path+'whole'
+    if not os.path.exists(dir_name):
+        os.mkdir(dir_name)
+    np.save(dir_name+'/prediction.npy', big_img)
+
+def magnify(img_path = "../image_data/veneto_new_version/n_label.tif"):
     im = Image.open(img_path)
     im = np.array(im)
     im[im == 100] = 0
@@ -36,9 +35,9 @@ def magnify(img_path = "/home/ainaz/Projects/Landslides/image_data/Veneto/veneto
     for i in range(len(indices[0])):
         r = indices[0][i]
         c = indices[1][i]
-        im[r-4:r+5, c-4:c+5] = 1
+        im[r-2:r+3, c-2:c+3] = 1
     im = th.from_numpy(im)
-    save_image(im, "/home/ainaz/Projects/Landslides/visualise/CNN/n_label_magnified9x9.tif")
+    save_image(im, "../vis_res/n_label_magnified5x5.tif")
 
 def vis_res(prd_path, bg_img_path):
     paste_loc = (1999, 0)
@@ -50,3 +49,35 @@ def vis_res(prd_path, bg_img_path):
     bg.paste(fg, paste_loc)
     bg.save("new_"+name+".jpg")
     # bg.show()
+
+def save_config(path, train_param, data_param):
+    with open(path, 'w') as f:
+         for params in [train_param, data_param]:
+            for e in params:
+                f.write('{}: {}\n'.format(e, params[e]))
+
+def plot(out_path, dset_path, colormap='coolwarm', region='Veneto'):
+    # two other colormaps: bwr, seismic
+    
+    # bottom = mpl.cm.get_cmap('Oranges_r', 128)
+    # top = mpl.cm.get_cmap('Blues', 128)
+    # newcolors = np.vstack((top(np.linspace(0, 0.1, 128)), bottom(np.linspace(1.0, 1, 128))))
+    # newcmp = mpl.colors.ListedColormap(newcolors, name='OrangeBlue')
+    f = h5py.File(dset_path, 'r')
+    gt = f[region]['gt'][0,5000:7500,11500:14000]
+    gt[gt<0] = 0
+    output = np.load(out_path)[5000:7500, 11500:14000]
+    # __norm__ = mpl.colors.Normalize(vmin=0, vmax=output.max())
+    __norm__ = mpl.colors.LogNorm(vmin=0.001, vmax=1)
+    # plt.subplot(1,2,1)
+    plt.imshow(output, cmap=colormap, norm=__norm__)
+    # plt.subplot(1,2,2)
+    # plt.imshow(gt, cmap='Reds')
+    plt.colorbar()
+    # plt.show()
+    save_to = '/'.join(out_path.split('/')[:-1])
+    name = out_path.split('/')[-3]
+    # name = 'gt'
+    plt.savefig(save_to+'/'+name+'.png', bbox_inches='tight')
+    # plt.savefig(save_to+'/'+name+'.eps', bbox_inches='tight')
+    # plt.show()

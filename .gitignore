@@ -1,6 +1,19 @@
 runs/
+plots/
+runs*/
+other_runs/
 .vscode/
 nohup.out
+*.h5
+*.out
+*.jpg
+*.tif
+*.yml
+*.sh
+*.eps
+*.png
+*.csv
+*.npy
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
