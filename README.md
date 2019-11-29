@@ -42,7 +42,6 @@ Validate the model:
 `python validate.py with 'params.load_model="/tmp/m1.pt"' ...`
 
 ### Extra links:
-[Link to the dataset](https://www.icloud.com/iclouddrive/0u2DT1h1SxivfRNCCbcs2iDQg#n%5Fdist%5Ffeature%5Fdata)
 
 [Sacred Documentation](https://sacred.readthedocs.io/en/stable/quickstart.html)
 
