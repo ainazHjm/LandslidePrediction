@@ -1,5 +1,5 @@
 # Landslide
-Classification task for predicting landslides based on GIS maps.
+Classification task for predicting landslides based on GIS maps using locally aligned convolutional neural networks. This work is licensed under a Creative Commons Attribution-NonCommercial-ShareAlike 3.0 License.
 
 ## Requirements
 * `numpy`
