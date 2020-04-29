@@ -48,7 +48,7 @@ Validate the model:
 [Tensorbaord Documentation for pytorch](https://github.com/lanpa/tensorboardX)
 
 ## Citation
-This repository implements the paper "Predicting Landslides Using Contour Aligning Convolutional Neural Networks, A. Hajimoradlou, G. Roberti, and D. Poole". Please cite our project, if you use the data or the code provided here in your work.
+This repository implements the paper "Predicting Landslides Using Locally Aligned Convolutional Neural Networks, A. Hajimoradlou, G. Roberti, and D. Poole". Please cite our project, if you use the data or the code provided here in your work.
 
 **Links**:
  - https://arxiv.org/abs/1911.04651
