@@ -46,3 +46,13 @@ Validate the model:
 [Sacred Documentation](https://sacred.readthedocs.io/en/stable/quickstart.html)
 
 [Tensorbaord Documentation for pytorch](https://github.com/lanpa/tensorboardX)
+
+## Citation
+This repository implements the paper "Predicting Landslides Using Contour Aligning Convolutional Neural Networks, A. Hajimoradlou, G. Roberti, and D. Poole". Please cite our project, if you use the data or the code provided here in your work.
+
+**Links**:
+ - https://arxiv.org/abs/1911.04651
+
+## LICENSE
+<a rel="license" href="http://creativecommons.org/licenses/by-sa/3.0/"><img alt="Creative Commons License" style="border-width:0" src="https://licensebuttons.net/l/by-nc-sa/3.0/80x15.png" /></a><br />This work is licensed under a <a rel="license" href="https://creativecommons.org/licenses/by-nc-sa/3.0/">Creative Commons Attribution-NonCommercial-ShareAlike 3.0 License</a>.
+
